@@ -10,7 +10,8 @@ import queue
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, ReliabilityPolicy
+from communication_guard import GraphGuard
 from rclpy.signals import SignalHandlerOptions
 from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import Odometry
@@ -24,7 +25,7 @@ from ir_sensor import GPIOInput
 
 
 class DockingNode(Node):
-    def __init__(self, config, gpio, execute=False, auto_start=False, vision_queue=None, recorder=None):
+    def __init__(self, config, gpio, execute=False, auto_start=False, vision_queue=None, recorder=None, graph_guard=None):
         super().__init__('docking_controller', namespace='/burger1')
         self.cfg, self.gpio, self.execute = config, gpio, execute
         self.target_ids = sorted(marker['id'] for marker in config['board_spec']['markers'])
@@ -46,14 +47,22 @@ class DockingNode(Node):
         self.physical_high = None
         self.motor_torque = self.motor_time = self.motor_request = None
         self.motor_client = self.create_client(SetBool, config['motor_power_service']) if execute else None
-        self.create_subscription(SensorState, config['motor_state_topic'], self.motor_state, qos_profile_sensor_data)
+        latest_sensor_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
+        self.graph_guard = graph_guard
+        self.owns_graph_guard = graph_guard is None
+        self.last_graph_snapshot = {}
+        self.ir_sample_to_publish_ms = None
+        self.control_tick_ms = None
+        self.create_subscription(SensorState, config['motor_state_topic'], self.motor_state, latest_sensor_qos)
         self.publisher = self.create_publisher(
             TwistStamped, config['cmd_topic'] if execute else '/burger1/docking/preview_cmd_vel', 1)
         self.status_pub = self.create_publisher(String, '/burger1/docking/status', 1)
         self.ir_pub = self.create_publisher(Bool, '/burger1/ir/high', 1)
-        self.create_subscription(Odometry, config['odom_topic'], self.odometry, qos_profile_sensor_data)
+        self.create_subscription(Odometry, config['odom_topic'], self.odometry, latest_sensor_qos)
         self.create_service(Trigger, '/burger1/docking/start', self.start)
         self.create_service(Trigger, '/burger1/docking/stop', self.stop)
+        if execute and self.graph_guard is None:
+            self.graph_guard = GraphGuard(config['cmd_topic'], self.get_name(), self.get_namespace(), 'docking')
         # GPIO is sampled on the robot even when the host loses communication.
         self.create_timer(.01, self.tick)
         self.get_logger().info('Mode: ' + ('EXECUTE' if execute else 'DRY RUN (preview topic only)'))
@@ -139,15 +148,16 @@ class DockingNode(Node):
         self.control.set_odom(p.x, p.y, yaw, twist.linear.x, twist.angular.z, time.monotonic())
 
     def graph_check(self):
-        if not self.execute:
+        if self.graph_guard is None:
             return None
-        pubs = self.get_publishers_info_by_topic(self.cfg['cmd_topic'])
-        if len(pubs) != 1 or pubs[0].node_name != self.get_name() or pubs[0].node_namespace != self.get_namespace():
-            return 'cmd_vel_has_other_publisher_or_graph_not_ready'
-        subs = self.get_subscriptions_info_by_topic(self.cfg['cmd_topic'])
-        if not subs or any(s.topic_type != 'geometry_msgs/msg/TwistStamped' for s in subs):
-            return 'TwistStamped_motor_subscriber_required'
-        return None
+        self.last_graph_snapshot = self.graph_guard.snapshot()
+        return self.last_graph_snapshot['error']
+
+    def destroy_node(self):
+        if self.graph_guard is not None and self.owns_graph_guard:
+            self.graph_guard.close()
+            self.graph_guard = None
+        return super().destroy_node()
 
     def read_ir(self):
         self.physical_high = self.gpio.high()
@@ -191,8 +201,8 @@ class DockingNode(Node):
 
     def start(self, _, response):
         try:
-            self.read_ir()
             error = self.graph_check()
+            self.read_ir()
             if error:
                 response.success, response.message = False, error
             else:
@@ -226,18 +236,23 @@ class DockingNode(Node):
         msg.header.frame_id = self.cfg['base_frame']
         msg.twist.linear.x, msg.twist.angular.z = float(v), float(w)
         self.publisher.publish(msg)
+        if self.control.ir_time is not None:
+            self.ir_sample_to_publish_ms = (time.monotonic()-self.control.ir_time)*1000
         if self.recorder:
             self.recorder.record('command', {'linear_mps': float(v), 'angular_rps': float(w),
                                             'execute': self.execute})
 
     def tick(self):
-        now = time.monotonic()
+        tick_started = time.monotonic()
+        now = tick_started
         previous = self.control.state
         try:
             high = self.read_ir()
             if high and self.control.state == 'IDLE':
                 self.control.halt('ir_already_high', fault=False)
             self.ir_pub.publish(Bool(data=high))
+            if high:
+                self.publish_velocity(0., 0.)
         except Exception as exc:
             self.control.halt('gpio_read_failed: '+str(exc))
             self.physical_high = None
@@ -248,12 +263,16 @@ class DockingNode(Node):
                 pass
             else:
                 self.observation(String(data=json.dumps(observation, allow_nan=False)))
-        if now-self.last_graph_check >= .2:
-            self.graph_error = self.graph_check()
-            self.last_graph_check = now
+        # Only a bounded shared-memory read; ROS graph calls run elsewhere.
+        self.graph_error = self.graph_check()
         if self.graph_error and self.control.state in self.control.ACTIVE:
             self.control.halt(self.graph_error)
-        # GPIO was sampled after tick entry; compare freshness against a later time.
+        # Re-sample after observation processing, immediately before control.
+        try:
+            self.read_ir()
+        except Exception as exc:
+            self.control.halt('gpio_read_failed: '+str(exc))
+            self.physical_high = None
         now = time.monotonic()
         motor_error = self.motor_error(now)
         if motor_error and self.control.state in self.control.ACTIVE:
@@ -277,6 +296,7 @@ class DockingNode(Node):
         if now-self.last_publish >= .05 or previous != self.control.state or self.physical_high is not False:
             self.publish_velocity(v, w)
             self.last_publish = now
+        self.control_tick_ms = (time.monotonic()-tick_started)*1000
         if now-self.last_status >= .2 or self.last_state != self.control.state:
             self.sequence += 1
             pose = self.control.pose()
@@ -286,7 +306,8 @@ class DockingNode(Node):
                       'target_ids': self.target_ids,
                       'linear_mps': v, 'angular_rps': w,
                       'travel_m': self.control.distance, 'final_travel_m': self.control.final_distance,
-                      'graph_error': self.graph_error, 'vision_error': self.last_vision_error,
+                      'graph_error': self.graph_error, 'graph_monitor': self.last_graph_snapshot,
+                      'ir_sample_to_publish_ms': self.ir_sample_to_publish_ms, 'control_tick_ms': self.control_tick_ms, 'vision_error': self.last_vision_error,
                       'vision_location': 'robot', 'image_age_s': self.image_age_s,
                       'detection_ms': self.detection_ms,
                       'motor_torque': self.motor_torque, 'motor_error': motor_error,

@@ -37,5 +37,7 @@ exec ros2 run camera_ros camera_node --ros-args \
   -p format:=BGR888 -p frame_id:=burger1_camera_optical_frame \
   -p FrameDurationLimits:="[${CAMERA_FRAME_US:-50000}, ${CAMERA_FRAME_US:-50000}]" \
   -p jpeg_quality:="${CAMERA_JPEG_QUALITY:-70}" \
+  -p qos_overrides./burger1/camera/image_raw.publisher.reliability:=best_effort \
+  -p qos_overrides./burger1/camera/image_raw.publisher.depth:=1 \
   -p qos_overrides./burger1/camera/image_raw/compressed.publisher.reliability:=best_effort \
   -p qos_overrides./burger1/camera/image_raw/compressed.publisher.depth:=1 "$@"

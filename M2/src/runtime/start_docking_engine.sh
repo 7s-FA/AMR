@@ -3,10 +3,15 @@ set -eo pipefail
 # Bound library thread pools before importing NumPy/OpenCV in spawned workers.
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# Standard normal docking reuses preloaded imports and fresh detection.
-if [[ "$*" == '--mode normal --execute --auto-start --exit-on-result' ]]; then
- if /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger2 --check; then
-  exec /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger2
+# Normal and parking reuse one detector/camera subscription; fresh mode handshake.
+WARM_MODE=""
+case "$*" in
+ '--mode normal --execute --auto-start --exit-on-result') WARM_MODE=normal ;;
+ '--mode parking --execute --auto-start --exit-on-result') WARM_MODE=parking ;;
+esac
+if [[ -n "$WARM_MODE" ]];then
+ if /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger2 --mode "$WARM_MODE" --check;then
+  exec /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger2 --mode "$WARM_MODE"
  fi
 fi
 # A custom/cold path must not share a preview with the standby detector.

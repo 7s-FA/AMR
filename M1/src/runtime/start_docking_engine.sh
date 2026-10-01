@@ -14,10 +14,15 @@ systemctl --user show burger1-base.service burger1-camera.service burger1-nav2.s
   -p Id -p ActiveState -p SubState -p MainPID > "$RUN_DIR/services.txt" 2>&1 || true
 pgrep -af '[c]amera_node.py|[/]cam --|[d]ocking_node.py|[t]urtlebot3_ros' \
   > "$RUN_DIR/processes.txt" || true
-# Standard normal docking reuses preloaded imports and fresh detection.
-if [[ "$*" == '--mode normal --execute --auto-start --exit-on-result' ]]; then
- if /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger1 --check; then
-  exec /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger1 --log-dir "$RUN_DIR"
+# Normal and parking reuse one detector/camera subscription; fresh mode handshake.
+WARM_MODE=""
+case "$*" in
+ '--mode normal --execute --auto-start --exit-on-result') WARM_MODE=normal ;;
+ '--mode parking --execute --auto-start --exit-on-result') WARM_MODE=parking ;;
+esac
+if [[ -n "$WARM_MODE" ]];then
+ if /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger1 --mode "$WARM_MODE" --check;then
+  exec /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger1 --mode "$WARM_MODE" --log-dir "$RUN_DIR"
  fi
 fi
 # A custom/cold path must not share a preview with the standby detector.

@@ -67,7 +67,8 @@ def main():
     from geometry_msgs.msg import TwistStamped
     from nav_msgs.msg import Odometry
     from rclpy.qos import qos_profile_sensor_data
-    gpio = node = None
+    from communication_guard import GraphGuard
+    gpio = node = guard = None
     stopping = False
     result = 1
     def stop_signal(*_):
@@ -95,12 +96,12 @@ def main():
             msg.twist.linear.x = float(v)
             msg.twist.angular.z = 0.0
             pub.publish(msg)
+        guard = GraphGuard(cfg['cmd_topic'], node.get_name(), node.get_namespace(), 'rest')
         def graph_ready():
-            publishers = node.get_publishers_info_by_topic(cfg['cmd_topic'])
-            if any(x.node_name != node.get_name() or x.node_namespace != node.get_namespace() for x in publishers):
+            error = guard.snapshot()['error']
+            if error == 'cmd_vel_has_other_publisher_or_graph_not_ready':
                 raise RuntimeError('다른 속도 명령 발행자가 있습니다. 먼저 해당 주행을 종료하세요.')
-            subscribers = node.get_subscriptions_info_by_topic(cfg['cmd_topic'])
-            return bool(subscribers) and all(x.topic_type == 'geometry_msgs/msg/TwistStamped' for x in subscribers)
+            return error is None
         wait_deadline = time.monotonic() + 8
         while not stopping and rclpy.ok():
             rclpy.spin_once(node, timeout_sec=.02)
@@ -159,6 +160,8 @@ def main():
             while time.monotonic() < end:
                 publish(0)
                 rclpy.spin_once(node, timeout_sec=.02)
+        if guard is not None:
+            guard.close()
         if gpio is not None:
             gpio.close()
         if node is not None:

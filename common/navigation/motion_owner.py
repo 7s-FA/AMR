@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """One motor publisher, exclusive command owner. No planning or speed tuning."""
-import argparse,math,signal,time,json
+import argparse,math,signal,time,json,threading
+from communication_guard import GraphGuard
 from pathlib import Path
 
 class CommandOwner:
@@ -30,6 +31,7 @@ def main():
     signal.signal(signal.SIGINT,stop);signal.signal(signal.SIGTERM,stop)
     output=node.create_publisher(TwistStamped,'cmd_vel',1)
     status=node.create_publisher(String,'motion_owner/status',1)
+    communication_pub=node.create_publisher(String,'motion_owner/communication_status',1)
     from rclpy.qos import QoSProfile,DurabilityPolicy
     mission_pub=node.create_publisher(String,'mission/status',QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
     mission_file=Path(__file__).resolve().parents[3]/'data'/a.robot/'mission_state.json'
@@ -38,14 +40,21 @@ def main():
     def send(v,w):
         v,w=gate_output(gate_file,v,w)
         m=TwistStamped();m.header.stamp=node.get_clock().now().to_msg();m.header.frame_id=a.robot+'/base_footprint';m.twist.linear.x=v;m.twist.angular.z=w;output.publish(m)
-    def other_motor_publisher():
-        # DDS may hide node names as UNKNOWN. This publisher always exists;
-        # more than one endpoint is the reliable duplicate check.
-        return len(node.get_publishers_info_by_topic('/'+a.robot+'/cmd_vel'))>1
+    guard=GraphGuard('/'+a.robot+'/cmd_vel', 'motion_owner', '/'+a.robot, 'motor', period=.5, max_age=1.5)
+    mission_snapshot={'data': None};file_stop=threading.Event()
+    def read_mission():
+        while not file_stop.is_set():
+            try:mission_snapshot['data']=mission_file.read_text()
+            except OSError:mission_snapshot['data']=None
+            file_stop.wait(.5)
+    file_worker=threading.Thread(target=read_mission,daemon=True);file_worker.start()
+    def communication_error():
+        return guard.snapshot()['error']
     def change(mode):
         def cb(req,res):
             owner.switch('idle');send(0.,0.)
-            if mode!='idle' and other_motor_publisher():res.success=False;res.message='다른 모터 명령 발행자가 있습니다.';return res
+            error=communication_error()
+            if mode!='idle' and error:res.success=False;res.message='모터 연결 확인 대기/오류: '+error;return res
             owner.switch(mode);status.publish(String(data=mode));res.success=True;res.message=mode;return res
         return cb
     for mode in ('idle','nav','direct'):node.create_service(Trigger,'motion_owner/'+mode,change(mode))
@@ -60,18 +69,20 @@ def main():
     node.create_subscription(TwistStamped,'cmd_vel_direct',input_cb('direct'),1)
     node.create_timer(.02,lambda:send(*owner.output(time.monotonic())))
     def health():
-        if other_motor_publisher() and owner.mode!='idle':
-            owner.switch('idle');send(0.,0.);node.get_logger().error('중복 모터 명령 발행자 감지: 중단')
+        snapshot=guard.snapshot();error=snapshot['error']
+        communication_pub.publish(String(data=json.dumps({'mode':owner.mode, **snapshot})))
+        if error and owner.mode!='idle':
+            owner.switch('idle');send(0.,0.);node.get_logger().error('모터 통신 감시 오류: '+error)
         status.publish(String(data=owner.mode))
-        if mission_file.exists():
-            try:mission_pub.publish(String(data=mission_file.read_text()))
-            except OSError:pass
+        cached=mission_snapshot['data']
+        if cached is not None:mission_pub.publish(String(data=cached))
     node.create_timer(.5,health)
     try:
         while rclpy.ok() and not stopping:rclpy.spin_once(node,timeout_sec=.1)
     finally:
         owner.switch('idle');end=time.monotonic()+.3
         while rclpy.ok() and time.monotonic()<end:send(0.,0.);rclpy.spin_once(node,timeout_sec=.02)
+        file_stop.set();guard.close();file_worker.join(timeout=.5)
         node.destroy_node()
         if rclpy.ok():rclpy.shutdown()
 if __name__=='__main__':main()

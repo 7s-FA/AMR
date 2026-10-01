@@ -13,7 +13,7 @@
 | 진단 토픽 | `/M1/mission/diagnostics` | `/M2/mission/diagnostics` |
 | ROS domain | 40 | 40 |
 
-호스트도 이 저장소의 `interfaces/host_pkg`와 동일 버전의 패키지를 빌드해야 합니다. 타입명을 임의로 `amr_interfaces`로 바꾸지 않았습니다. 2026-10-01 확인한 host_pc/main에는 실제 `.action` 파일이 없었고 클라이언트는 `host_pkg.action.Burger`를 import하고 있었습니다.
+호스트 기준은 사용자가 지정한 `/home/jh/Desktop/final_251001/final_project_ws/host/src/host_pkg`입니다. 이 폴더의 `Burger.action` 필드·순서와 M1/M2 Action 주소가 AMR과 일치합니다. 원본 호스트 client로 Goal/Feedback/Result 통신을 확인했습니다. 호스트 소스는 수정하지 않았습니다.
 
 ## Goal
 
@@ -53,15 +53,9 @@ Action 취소·서버 종료·작업 실패도 정지 래치를 설정합니다.
 - Result `success=true`, `message=IDLE`: 경로와 종단 정지까지 확인한 성공, 또는 제어 명령의 성공.
 - 실패는 `success=false`, `message=ERROR` 및 Action aborted/canceled. 상세 이유·goal_id는 진단 토픽, journal, 로봇 작업 JSON에 기록합니다.
 
-## host_pc 담당자에게 필요한 변경
+## 지정 호스트의 남은 문제
 
-1. 현재 `/burger1/data`, `/burger2/data`를 `/M1/data`, `/M2/data`로 변경합니다. 로봇 Action 노드도 `/M1`, `/M2` namespace에서 실행되며, 다른 로봇 namespace의 주소는 거부합니다.
-2. 예제 `move_to_warehouse` 문자열을 `GO_TO_MAT`로 변경합니다.
-3. 예제 speed=1.5/5를 m/s로 해석하면 안 됩니다. 실제 사용할 백분율을 보냅니다.
-4. 접수 성공 로그와 실제 Result 성공을 구분합니다. 공정의 다음 단계는 최종 Result로 진행합니다.
-5. 서로 다른 인터페이스 패키지를 따로 작성하지 않고 이 `Burger.action`을 동일하게 빌드합니다.
-
-참조한 호스트 파일: [burger1_node.py](https://github.com/7s-FA/host_pc/blob/9c251a055223041c814c0088b35df7c1b216de4d/burger1_node.py), [burger2_node.py](https://github.com/7s-FA/host_pc/blob/9c251a055223041c814c0088b35df7c1b216de4d/burger2_node.py), [control.py](https://github.com/7s-FA/host_pc/blob/9c251a055223041c814c0088b35df7c1b216de4d/control.py). 호스트 저장소 코드는 이번 작업에서 수정하지 않았습니다.
+호스트의 M1 결과 변수명 오류, M2 완료 플래그 누락, 단일 로봇 미구현, 정지 명령 미전송과 무제한 대기 때문에 전체 공정 진행은 보장할 수 없습니다. 사용자 요청으로 수정하지 않았습니다. [원본 코드 위치·영향·실행 안내](reference_host/2026-10-01.md)를 확인하세요.
 
 ## 종단 완료 근거
 
