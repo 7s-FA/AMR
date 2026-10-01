@@ -1,0 +1,10 @@
+# M2 camera source revisions from the tested robot setup_camera.sh.
+repositories:
+  camera/libcamera:
+    type: git
+    url: https://github.com/raspberrypi/libcamera.git
+    version: 6c1dd9d55573010f710c9e190a73e7e76f0d9432
+  camera/camera_ros:
+    type: git
+    url: https://github.com/christianrauch/camera_ros.git
+    version: f4023dc09cfc5fd36fedbb3656ad3a98733e297a

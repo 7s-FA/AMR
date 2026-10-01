@@ -1,0 +1,947 @@
+# Burger2: initial pose is unregistered. Use 2D Pose Estimate, then save_burger2_start_pose.sh.
+# Burger1 / LDS-02 / namespaced /burger2/scan. Based on local TurtleBot3 Jazzy burger.yaml.
+# Burger2: only forward Nav2 controllers are enabled.
+# FollowPath retains standard DWB terminal-yaw behavior for other clients.
+# Departure backup is an explicit timed maneuver, separate from Nav2 paths.
+# Waypoints use PositionGoalChecker, stop, then collision-checked Spin for final yaw.
+# Both travel modes allow steering; this is not a fixed-heading mode.
+# Waypoint limits: moving X speed 0.025..0.08 m/s in either direction.
+# Base Nav2 YAML defaults: XY 0.05 m, yaw 0.25 rad (~14.3 deg).
+# Burger1 launch overlays XY/intermediate XY 0.02 m from waypoints.yaml for this trial.
+# These are settings, not measured accuracy.
+amcl:
+  ros__parameters:
+    # 회전에 따른 회전 오도메트리 잡음 계수. 크게 하면 해당 오차를 더 크게 가정.
+    alpha1: 0.2
+    # 병진에 따른 회전 오도메트리 잡음 계수.
+    alpha2: 0.2
+    # 병진에 따른 병진 오도메트리 잡음 계수.
+    alpha3: 0.2
+    # 회전에 따른 병진 오도메트리 잡음 계수.
+    alpha4: 0.2
+    # 옴니 이동 모델의 횡방향 잡음 계수. 현재 DifferentialMotionModel에서는 사용하지 않음.
+    alpha5: 0.2
+    # 로봇 기준 TF 프레임. 실제 TF 이름과 일치해야 함.
+    base_frame_id: burger2/base_footprint
+    # 빔 스킵 거리 기준(m). do_beamskip 및 지원 센서 모델일 때만 적용.
+    beam_skip_distance: 0.5
+    # 스킵 비율이 이 값을 넘으면 전체 빔으로 복귀하는 기준.
+    beam_skip_error_threshold: 0.9
+    # 빔 스킵 판단에 필요한 입자 일치 비율.
+    beam_skip_threshold: 0.3
+    # 빔 스킵 사용 여부. 현재 false이며 likelihood_field_prob 등 지원 모델 확인 필요.
+    do_beamskip: false
+    # 지도 기준 TF 프레임 이름.
+    global_frame_id: burger2/map
+    # beam 센서 모델의 짧은 거리 측정 지수분포 계수. 현재 likelihood_field에는 미적용.
+    lambda_short: 0.1
+    # likelihood field에서 장애물 거리 계산 상한(m).
+    laser_likelihood_max_dist: 2.0
+    # 라이다 유효 최대 거리(m). 센서 사양에 맞춤; 음수는 메시지 값 사용.
+    laser_max_range: 100.0
+    # 라이다 유효 최소 거리(m). 음수는 메시지 값 사용.
+    laser_min_range: -1.0
+    # 라이다 확률 모델 선택. 모델에 따라 유효한 센서 파라미터가 달라짐.
+    laser_model_type: likelihood_field
+    # 스캔당 위치추정에 사용할 최대 빔 수. 증가하면 계산량 증가.
+    max_beams: 60
+    # AMCL 최대 입자 수. 증가하면 복잡한 위치 분포 표현과 CPU 사용량 증가.
+    max_particles: 2000
+    # AMCL 최소 입자 수. 최소 계산량과 추정 안정성에 영향.
+    min_particles: 500
+    # 오도메트리 TF 프레임 이름.
+    odom_frame_id: burger2/odom
+    # 적응형 입자 필터 허용 오차. 작게 하면 일반적으로 더 많은 입자 필요.
+    pf_err: 0.05
+    # 적응형 입자 수 산정 신뢰도 관련 값. pf_err 및 입자 수와 함께 조정.
+    pf_z: 0.99
+    # 빠른 관측 평균 갱신 계수. 재위치추정용 무작위 입자 주입 판단에 사용.
+    recovery_alpha_fast: 0.0
+    # 느린 관측 평균 갱신 계수. fast/slow가 0이면 해당 복구 기능 비활성.
+    recovery_alpha_slow: 0.0
+    # 필터 갱신 몇 회마다 입자를 재표본화할지 설정.
+    resample_interval: 1
+    # AMCL 이동 모델 플러그인. 차동구동 Burger는 DifferentialMotionModel.
+    robot_model_type: nav2_amcl::DifferentialMotionModel
+    # 마지막 추정 자세 저장 주기(Hz). 외부 파일 저장 기능과는 별개.
+    save_pose_rate: 0.5
+    # 측정 일치 분포 표준편차(m). 크게 하면 거리 오차를 넓게 허용.
+    sigma_hit: 0.2
+    # AMCL의 map→odom TF 발행 여부. 다른 발행자와 중복 금지.
+    tf_broadcast: true
+    # TF 허용 시간(s). AMCL은 발행 TF의 미래 유효 시간; 다른 노드는 변환 허용/대기 기준.
+    transform_tolerance: 0.5
+    # AMCL 갱신을 유발할 최소 회전량(rad). 줄이면 더 자주 갱신.
+    update_min_a: 0.05
+    # AMCL 갱신을 유발할 최소 이동량(m). 줄이면 더 자주 갱신.
+    update_min_d: 0.02
+    # 정상 측정 성분 가중치. 센서 모델의 혼합 비율.
+    z_hit: 0.5
+    # 최대 거리 성분 가중치. beam 모델용; 현재 likelihood_field에는 미적용.
+    z_max: 0.05
+    # 무작위 측정 성분 가중치. 크게 하면 센서 이상값 허용 증가.
+    z_rand: 0.5
+    # 예상보다 짧은 측정 성분 가중치. beam 모델용; 현재 모델에는 미적용.
+    z_short: 0.05
+    # AMCL이 구독할 LaserScan 토픽.
+    scan_topic: /burger2/scan
+    # 지도 구독 토픽 설정. 설치된 AMCL 버전의 지원 여부 확인.
+    map_topic: map
+    # true면 아래 initial_pose로 시작. 실제 출발 위치가 다르면 재등록 필요.
+    set_initial_pose: true
+    # 재활성화 때 이전 추정 대신 새 초기 자세를 요구할지 여부.
+    always_reset_initial_pose: false
+    # 첫 지도만 사용할지 여부. false면 후속 지도도 처리.
+    first_map_only: false
+    initial_pose:
+      # 초기 자세의 지도 X 위치(m).
+      x: 0.008258599567777303
+      # 초기 자세의 지도 Y 위치(m).
+      y: -0.344867488367798
+      # 초기 자세의 높이(m). 평면 이동은 보통 0.
+      z: 0.0
+      # 초기 자세의 방향(rad). waypoints.yaml의 degree와 단위가 다름.
+      yaw: 3.138493403842874
+bt_navigator:
+  ros__parameters:
+    # 행동트리 목표 접수 응답 대기(ms). 기본 20ms의 일시적 지연 오판을 완화.
+    default_server_timeout: 1000
+    # 행동트리 검사 주기(ms). 모터 제어 주파수(controller_frequency)는 유지.
+    bt_loop_duration: 20
+    # 전역/처리 기준 TF 프레임 이름. 현재 local/global costmap 모두 map 기준.
+    global_frame: burger2/map
+    # 로봇 기준 TF 프레임. 실제 base_link/base_footprint 관계 확인.
+    robot_base_frame: burger2/base_link
+    # TF 허용 시간(s). AMCL은 발행 TF의 미래 유효 시간; 다른 노드는 변환 허용/대기 기준.
+    transform_tolerance: 0.5
+    # 내비게이터가 속도 추정에 사용하는 오도메트리 평균 시간(s).
+    filter_duration: 0.3
+    # 단일 목표 기본 행동트리 파일. 사용자 지정 BT를 목표에 전달하면 그 파일이 우선.
+    default_nav_to_pose_bt_xml: $(find-pkg-share nav2_bt_navigator)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+    # 다중 목표 기본 BT 경로. 현재 단일 목표용 XML과 같으므로 다중 목표 사용 전 확인.
+    default_nav_through_poses_bt_xml: $(find-pkg-share nav2_bt_navigator)/behavior_trees/navigate_to_pose_w_replanning_and_recovery.xml
+    # 목표마다 BT XML을 다시 읽을지 여부. 수정 반영 편의와 로딩 비용 절충.
+    always_reload_bt_xml: false
+    # BT에서 단일 목표를 전달하는 블랙보드 키. XML과 일치 필요.
+    goal_blackboard_id: goal
+    # BT에서 여러 목표를 전달하는 블랙보드 키.
+    goals_blackboard_id: goals
+    # BT에서 경로를 공유하는 블랙보드 키.
+    path_blackboard_id: path
+    # 로드할 내비게이터 ID 목록. 하위 플러그인 이름과 일치 필요.
+    navigators:
+    - navigate_to_pose
+    - navigate_through_poses
+    navigate_to_pose:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_bt_navigator::NavigateToPoseNavigator
+    navigate_through_poses:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_bt_navigator::NavigateThroughPosesNavigator
+    # BT 오류 코드 이름 접두사 목록. 배포판/설치 버전 지원 여부 확인.
+    error_code_name_prefixes:
+    - assisted_teleop
+    - backup
+    - compute_path
+    - dock_robot
+    - drive_on_heading
+    - follow_path
+    - nav_thru_poses
+    - nav_to_pose
+    - spin
+    - route
+    - undock_robot
+    - wait
+# [별도 서버 설정] YAML 존재만으로 실행되지 않음. robot/burger2/docking.yaml과 별개.
+docking_server:
+  ros__parameters:
+    # Nav2 docking server의 도크 플러그인 ID 목록. 프로젝트 카메라 도킹과 별개.
+    dock_plugins:
+    - nova_carter_dock
+    nova_carter_dock:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: opennav_docking::SimpleChargingDock
+    # Nav2 docking server의 도크 ID 목록. 서버가 실제 실행돼야 적용.
+    docks:
+    - home_dock
+    - flex_dock1
+    - flex_dock2
+    home_dock:
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: nova_carter_dock
+      # 도크 위치를 표현하는 TF 프레임.
+      frame: burger2/map
+      # 도크 자세 배열 [x(m), y(m), yaw(rad)]. 현재 예시 위치를 실제 도크로 오인하지 말 것.
+      pose:
+      - 0.0
+      - 0.0
+      - 0.0
+    flex_dock1:
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: nova_carter_dock
+      # 도크 위치를 표현하는 TF 프레임.
+      frame: burger2/map
+      # 도크 자세 배열 [x(m), y(m), yaw(rad)]. 현재 예시 위치를 실제 도크로 오인하지 말 것.
+      pose:
+      - 10.0
+      - 10.0
+      - 0.0
+    flex_dock2:
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: nova_carter_dock
+      # 도크 위치를 표현하는 TF 프레임.
+      frame: burger2/map
+      # 도크 자세 배열 [x(m), y(m), yaw(rad)]. 현재 예시 위치를 실제 도크로 오인하지 말 것.
+      pose:
+      - 30.0
+      - 30.0
+      - 0.0
+    # true는 TwistStamped 속도 메시지 사용. 연결된 송수신 노드 모두 형식 일치 필요.
+    enable_stamped_cmd_vel: true
+controller_server:
+  ros__parameters:
+    # 속도 제어 루프(Hz). 증가하면 반응 주기가 짧아지지만 CPU 부담 증가.
+    controller_frequency: 10.0
+    # 이 값 미만의 odom X 속도를 0으로 취급(m/s). 명령 최소속도가 아님.
+    min_x_velocity_threshold: 0.001
+    # 이 값 미만의 odom Y 속도를 0으로 취급(m/s).
+    min_y_velocity_threshold: 0.001
+    # 이 값 미만의 odom 각속도를 0으로 취급(rad/s).
+    min_theta_velocity_threshold: 0.001
+    # 컨트롤러 실패를 허용할 시간(s). 목표 도착 오차가 아님.
+    failure_tolerance: 0.3
+    # 진행 여부 검사 플러그인 ID 목록.
+    progress_checker_plugins:
+    - progress_checker
+    # 목표 도달 검사 플러그인 ID 목록. 행동트리에서 선택.
+    goal_checker_plugins:
+    - goal_checker
+    - position_goal_checker
+    # 사용 가능한 컨트롤러 ID 목록. 실제 선택은 BT의 controller_id.
+    controller_plugins:
+    - FollowPath
+    - FollowPositionForward
+    progress_checker:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_controller::PoseProgressChecker
+      # 진행으로 인정할 최소 이동거리(m). PoseProgressChecker는 회전 조건도 인정.
+      required_movement_radius: 0.05
+      # 진행으로 인정할 최소 회전각(rad).
+      required_movement_angle: 0.1
+      # 진행 조건을 충족해야 하는 제한 시간(s). 너무 짧으면 정상 저속주행도 실패 가능.
+      movement_time_allowance: 10.0
+    position_goal_checker:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_controller::PositionGoalChecker
+      # 목표 위치 허용 반경(m). 줄이면 엄격해지지만 실제 센서 정확도 향상을 뜻하지 않음.
+      xy_goal_tolerance: 0.05
+      # 상태 유지 여부. SimpleGoalChecker는 XY 통과 상태 유지; DWB는 RotateToGoal 상태 유지; 플러그인별 의미 확인.
+      stateful: false
+    goal_checker:
+      # 상태 유지 여부. SimpleGoalChecker는 XY 통과 상태 유지; DWB는 RotateToGoal 상태 유지; 플러그인별 의미 확인.
+      stateful: true
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_controller::SimpleGoalChecker
+      # 목표 위치 허용 반경(m). 줄이면 엄격해지지만 실제 센서 정확도 향상을 뜻하지 않음.
+      xy_goal_tolerance: 0.05
+      # 목표 방향 허용 오차(rad). 이 프로젝트의 최종 Spin 후 검증에서도 읽음.
+      yaw_goal_tolerance: 0.25
+    FollowPath:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: dwb_core::DWBLocalPlanner
+      # 후보 궤적 상세 디버그 출력. false로 바꾸면 디버그 정보/부하 감소.
+      debug_trajectory_details: true
+      # 차체 X 최소 속도(m/s). 음수는 후진, 전진 전용은 0.
+      min_vel_x: 0.0
+      # 차체 횡방향 최소 속도(m/s). 차동구동 Burger는 0 유지.
+      min_vel_y: 0.0
+      # 차체 X 최대 속도(m/s). 후진 전용은 0; smoother 상한도 함께 확인.
+      max_vel_x: 0.15
+      # 차체 횡방향 최대 속도(m/s). 차동구동 Burger는 0 유지.
+      max_vel_y: 0.0
+      # 최대 회전 속력(rad/s). 증가하면 빠르게 회전하며 제동/추종 특성 확인 필요.
+      max_vel_theta: 1.0
+      # 평면 이동 속력 하한(m/s). 음의 후진 속도 하한과는 다름.
+      min_speed_xy: 0.0
+      # 평면 이동 속력 상한(m/s). 전후진 모두 속력의 크기 기준.
+      max_speed_xy: 0.15
+      # 회전 속력 하한(rad/s). 높으면 미세 회전에 불리할 수 있음.
+      min_speed_theta: 0.0
+      # X 가속도 상한(m/s²). 실제 구동계 및 smoother와 맞춤.
+      acc_lim_x: 3.0
+      # Y 가속도 상한(m/s²). 차동구동은 0.
+      acc_lim_y: 0.0
+      # 각가속도 상한(rad/s²).
+      acc_lim_theta: 3.2
+      # X 감속도(m/s²), 음수로 설정. 절댓값이 크면 더 급한 감속 허용.
+      decel_lim_x: -2.5
+      # Y 감속도(m/s²). 차동구동은 0.
+      decel_lim_y: 0.0
+      # 각감속도(rad/s²), 음수로 설정.
+      decel_lim_theta: -3.2
+      # X 속도 후보 수. 증가하면 탐색량/CPU 증가; 후진 정지 후보 포함 여부 확인.
+      vx_samples: 20
+      # Y 속도 후보 수. 차동구동은 1이면 충분.
+      vy_samples: 1
+      # 각속도 후보 수. 증가하면 조향 후보가 세밀해지고 계산량 증가.
+      vtheta_samples: 40
+      # 후보 궤적 예측 시간(s). 길수록 먼 미래 평가, 좁은 공간에서 제약 증가 가능.
+      sim_time: 1.5
+      # 궤적 선형 검사 간격(m). 작게 하면 정밀하지만 계산량 증가.
+      linear_granularity: 0.05
+      # 궤적 각도 검사 간격(rad). 작게 하면 회전 검사량 증가.
+      angular_granularity: 0.025
+      # TF 허용 시간(s). AMCL은 발행 TF의 미래 유효 시간; 다른 노드는 변환 허용/대기 기준.
+      transform_tolerance: 0.2
+      # 목표 위치 허용 반경(m). 줄이면 엄격해지지만 실제 센서 정확도 향상을 뜻하지 않음.
+      xy_goal_tolerance: 0.05
+      # 정지로 간주할 병진 속력(m/s). 실제 명령속도 상한이 아님.
+      trans_stopped_velocity: 0.02
+      # 이미 최선보다 나쁜 궤적의 평가를 조기 종료하여 계산 절약.
+      short_circuit_trajectory_evaluation: true
+      # 상태 유지 여부. SimpleGoalChecker는 XY 통과 상태 유지; DWB는 RotateToGoal 상태 유지; 플러그인별 의미 확인.
+      stateful: true
+      # 궤적 점수 평가 목록. 없는 critic의 하위 값은 적용되지 않음.
+      critics:
+      - RotateToGoal
+      - Oscillation
+      - BaseObstacle
+      - GoalAlign
+      - PathAlign
+      - PathDist
+      - GoalDist
+      # 장애물 cost 점수 가중치. 높이면 장애물 비용을 더 강하게 반영.
+      BaseObstacle.scale: 0.02
+      # 경로 방향 정렬 가중치. 높이면 경로 방향을 더 강하게 추종.
+      PathAlign.scale: 32.0
+      # 경로 정렬 평가에 쓸 전방 점 거리(m). 후진 설정에서는 이 critic 제외.
+      PathAlign.forward_point_distance: 0.1
+      # 목표 방향 정렬 critic 가중치. 최종 yaw 허용 오차 자체가 아님.
+      GoalAlign.scale: 24.0
+      # 목표 정렬 평가에 쓸 전방 점 거리(m).
+      GoalAlign.forward_point_distance: 0.1
+      # 경로에서 벗어난 거리의 점수 가중치. 높이면 경로에 더 밀착.
+      PathDist.scale: 32.0
+      # 목표까지 남은 거리의 점수 가중치. 높이면 목표 접근 선호.
+      GoalDist.scale: 24.0
+      # 도착 후 회전 critic 가중치. Position 전용 컨트롤러에서는 사용하지 않음.
+      RotateToGoal.scale: 32.0
+      # 목표 근처 병진 속도에 대한 감속 점수 계수. 크게 하면 저속 궤적 선호 강화.
+      RotateToGoal.slowing_factor: 5.0
+      # 회전 궤적 평가 시점(s). 음수는 최종 예측 자세 사용.
+      RotateToGoal.lookahead_time: -1.0
+    # true는 TwistStamped 속도 메시지 사용. 연결된 송수신 노드 모두 형식 일치 필요.
+    enable_stamped_cmd_vel: true
+    # 전진 설정 기준 후진 시험: 음의 X 속도, 뒤쪽 경로 정렬.
+    # GoalAlign은 전진 지향 구현이므로 후진에서는 비활성. 21 samples로 정지 후보 포함.
+    FollowPositionForward:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: dwb_core::DWBLocalPlanner
+      # 후보 궤적 상세 디버그 출력. false로 바꾸면 디버그 정보/부하 감소.
+      debug_trajectory_details: false
+      # 차체 X 최소 속도(m/s). 음수는 후진, 전진 전용은 0.
+      # 0은 제자리 조향용. PositionApproach critic이 0<v<0.025 후보를 제외한다.
+      min_vel_x: 0.0
+      # 차체 횡방향 최소 속도(m/s). 차동구동 Burger는 0 유지.
+      min_vel_y: 0.0
+      # 차체 X 최대 속도(m/s). 후진 전용은 0; smoother 상한도 함께 확인.
+      max_vel_x: 0.066
+      # 차체 횡방향 최대 속도(m/s). 차동구동 Burger는 0 유지.
+      max_vel_y: 0.0
+      # 최대 회전 속력(rad/s). 증가하면 빠르게 회전하며 제동/추종 특성 확인 필요.
+      # 이동 중 회전은 최대 0.35 rad/s. 목표 주변 큰 원운동 억제.
+      max_vel_theta: 0.462
+      # 평면 이동 속력 하한(m/s). 음의 후진 속도 하한과는 다름.
+      min_speed_xy: 0.0
+      # 평면 이동 속력 상한(m/s). 전후진 모두 속력의 크기 기준.
+      max_speed_xy: 0.066
+      # 회전 속력 하한(rad/s). 높으면 미세 회전에 불리할 수 있음.
+      min_speed_theta: 0.0
+      # X 가속도 상한(m/s²). 실제 구동계 및 smoother와 맞춤.
+      acc_lim_x: 0.33
+      # Y 가속도 상한(m/s²). 차동구동은 0.
+      acc_lim_y: 0.0
+      # 각가속도 상한(rad/s²).
+      acc_lim_theta: 1.056
+      # X 감속도(m/s²), 음수로 설정. 절댓값이 크면 더 급한 감속 허용.
+      decel_lim_x: -0.462
+      # Y 감속도(m/s²). 차동구동은 0.
+      decel_lim_y: 0.0
+      # 각감속도(rad/s²), 음수로 설정.
+      decel_lim_theta: -1.056
+      # X 속도 후보 수. 증가하면 탐색량/CPU 증가; 후진 정지 후보 포함 여부 확인.
+      vx_samples: 11
+      # Y 속도 후보 수. 차동구동은 1이면 충분.
+      vy_samples: 1
+      # 각속도 후보 수. 증가하면 조향 후보가 세밀해지고 계산량 증가.
+      vtheta_samples: 21
+      # 후보 궤적 예측 시간(s). 길수록 먼 미래 평가, 좁은 공간에서 제약 증가 가능.
+      sim_time: 0.6
+      # 궤적 선형 검사 간격(m). 작게 하면 정밀하지만 계산량 증가.
+      linear_granularity: 0.01
+      # 궤적 각도 검사 간격(rad). 작게 하면 회전 검사량 증가.
+      angular_granularity: 0.025
+      # TF 허용 시간(s). AMCL은 발행 TF의 미래 유효 시간; 다른 노드는 변환 허용/대기 기준.
+      transform_tolerance: 0.2
+      # 목표 위치 허용 반경(m). 줄이면 엄격해지지만 실제 센서 정확도 향상을 뜻하지 않음.
+      xy_goal_tolerance: 0.05
+      # 정지로 간주할 병진 속력(m/s). 실제 명령속도 상한이 아님.
+      trans_stopped_velocity: 0.02
+      # 이미 최선보다 나쁜 궤적의 평가를 조기 종료하여 계산 절약.
+      short_circuit_trajectory_evaluation: true
+      # 상태 유지 여부. SimpleGoalChecker는 XY 통과 상태 유지; DWB는 RotateToGoal 상태 유지; 플러그인별 의미 확인.
+      stateful: true
+      # 궤적 점수 평가 목록. 없는 critic의 하위 값은 적용되지 않음.
+      critics:
+      - waffle_navigation::PositionApproach
+      - Oscillation
+      - BaseObstacle
+      - PathAlign
+      - PathDist
+      - GoalDist
+      - Twirling
+      # 장애물 cost 점수 가중치. 높이면 장애물 비용을 더 강하게 반영.
+      waffle_navigation::PositionApproach.scale: 1000.0
+      BaseObstacle.scale: 0.02
+      # 목표 방향 정렬 critic 가중치. 최종 yaw 허용 오차 자체가 아님.
+      GoalAlign.scale: 0.0
+      # 목표 정렬 평가에 쓸 전방 점 거리(m).
+      GoalAlign.forward_point_distance: 0.1
+      # 경로 방향 정렬 가중치. 높이면 경로 방향을 더 강하게 추종.
+      PathAlign.scale: 12.0
+      # 경로 정렬 평가에 쓸 전방 점 거리(m). 후진 설정에서는 이 critic 제외.
+      PathAlign.forward_point_distance: 0.08
+      # 경로에서 벗어난 거리의 점수 가중치. 높이면 경로에 더 밀착.
+      PathDist.scale: 24.0
+      # 목표까지 남은 거리의 점수 가중치. 높이면 목표 접근 선호.
+      GoalDist.scale: 32.0
+    # 전진 설정 기준 후진 시험: 음의 X 속도, 뒤쪽 경로 정렬.
+    # GoalAlign은 전진 지향 구현이므로 후진에서는 비활성. 21 samples로 정지 후보 포함.
+      # 이동 중 회전 비용. 최종 yaw는 별도 Spin에서 정렬.
+      Twirling.scale: 0.6
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      # costmap 계산 갱신 주파수(Hz). 높이면 장애물 반영이 빨라지고 CPU 증가.
+      update_frequency: 5.0
+      # costmap 발행 주파수(Hz). 계산 주파수와 별개, 통신량에 영향.
+      publish_frequency: 2.0
+      # 전역/처리 기준 TF 프레임 이름. 현재 local/global costmap 모두 map 기준.
+      # Same map frame as goal: avoid transforming a path-stamped goal with old AMCL TF.
+      global_frame: burger2/map
+      # 로봇 기준 TF 프레임. 실제 base_link/base_footprint 관계 확인.
+      robot_base_frame: burger2/base_link
+      # 로봇을 따라 움직이는 지역 지도 창 사용 여부.
+      rolling_window: true
+      # 초기 위치 입력을 기다리는 여유. 이후에도 실패하면 주행 시작 시 재활성화.
+      initial_transform_timeout: 300.0
+      # 지역 costmap 폭(m). 크게 하면 주변 영역/메모리 사용 증가.
+      width: 3
+      # 지역 costmap 높이(m).
+      height: 3
+      # 격자 한 칸 크기(m/cell). 작게 하면 세밀하지만 메모리/계산량 증가.
+      # 20 mm 도착 판정에 맞춰 로컬 평가 격자는 10 mm. 지도 파일은 그대로.
+      resolution: 0.01
+      # 원형 로봇 외곽 반경(m). 실제 차체와 적재물 크기에 맞춤; 통과를 위해 축소하지 않음.
+      robot_radius: 0.1
+      # 실제로 로드할 costmap 레이어 목록. 목록에 없는 블록은 실행되지 않음.
+      plugins:
+      - obstacle_layer
+      - voxel_layer
+      - inflation_layer
+
+      # Oscillation.scale: 2.0
+      inflation_layer:
+        # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+        plugin: nav2_costmap_2d::InflationLayer
+        # 장애물 주변 비용 확장 반경(m). 크게 하면 더 넓게 여유 공간을 선호.
+        inflation_radius: 0.15
+        # 팽창 비용의 지수 감쇠율. 크게 하면 비용이 더 빨리 떨어져 장애물에 가까운 경로 가능.
+        cost_scaling_factor: 5.0
+      obstacle_layer:
+        # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+        plugin: nav2_costmap_2d::ObstacleLayer
+        # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+        enabled: true
+        # 관측원 이름 목록. 하위 센서 블록 이름과 일치 필요.
+        observation_sources: scan
+        scan:
+          # 해당 센서 입력 토픽. /로 시작하면 절대 이름.
+          topic: /burger2/scan
+          # 장애물로 사용할 최대 높이(m).
+          max_obstacle_height: 2.0
+          # 센서 광선 추적으로 비어 있는 공간의 장애물 비용 제거 여부.
+          clearing: true
+          # 센서 검출점을 장애물로 표시할지 여부.
+          marking: true
+          # 관측 메시지 형식. 현재 LaserScan.
+          data_type: LaserScan
+      voxel_layer:
+        # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+        plugin: nav2_costmap_2d::VoxelLayer
+        # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+        enabled: true
+        # 3D voxel 디버그 지도 발행 여부. 꺼도 voxel 계산 자체는 별개.
+        publish_voxel_map: true
+        # voxel 지도 높이 원점(m).
+        origin_z: 0.0
+        # voxel 높이 한 칸(m).
+        z_resolution: 0.05
+        # 높이 방향 voxel 개수. 구현 지원 상한(보통 16) 확인.
+        z_voxels: 16
+        # 장애물로 사용할 최대 높이(m).
+        max_obstacle_height: 2.0
+        # 열에서 장애물로 투영하기 위한 점유 voxel 개수 기준. 높이면 희소 검출 무시 증가.
+        mark_threshold: 0
+        # 관측원 이름 목록. 하위 센서 블록 이름과 일치 필요.
+        observation_sources: scan
+        scan:
+          # 해당 센서 입력 토픽. /로 시작하면 절대 이름.
+          topic: /burger2/scan
+          # 장애물로 사용할 최대 높이(m).
+          max_obstacle_height: 2.0
+          # 센서 광선 추적으로 비어 있는 공간의 장애물 비용 제거 여부.
+          clearing: true
+          # 센서 검출점을 장애물로 표시할지 여부.
+          marking: true
+          # 관측 메시지 형식. 현재 LaserScan.
+          data_type: LaserScan
+          # 비어 있는 공간을 지우는 광선 추적 최대 거리(m).
+          raytrace_max_range: 3.0
+          # 광선 추적 최소 거리(m).
+          raytrace_min_range: 0.0
+          # 장애물 표시 최대 거리(m).
+          obstacle_max_range: 2.5
+          # 장애물 표시 최소 거리(m).
+          obstacle_min_range: 0.0
+      static_layer:
+        # 지도의 transient-local QoS 사용. 늦게 시작한 구독자도 저장된 지도 수신.
+        map_subscribe_transient_local: true
+      # true면 전체 지도 발행, false면 증분 발행 활용. 대역폭 영향.
+      always_send_full_costmap: true
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      # costmap 계산 갱신 주파수(Hz). 높이면 장애물 반영이 빨라지고 CPU 증가.
+      update_frequency: 1.0
+      # costmap 발행 주파수(Hz). 계산 주파수와 별개, 통신량에 영향.
+      publish_frequency: 1.0
+      # 전역/처리 기준 TF 프레임 이름. 현재 local/global costmap 모두 map 기준.
+      global_frame: burger2/map
+      # 로봇 기준 TF 프레임. 실제 base_link/base_footprint 관계 확인.
+      robot_base_frame: burger2/base_link
+      # TF 허용 시간(s). AMCL은 발행 TF의 미래 유효 시간; 다른 노드는 변환 허용/대기 기준.
+      transform_tolerance: 0.5
+      # 원형 로봇 외곽 반경(m). 실제 차체와 적재물 크기에 맞춤; 통과를 위해 축소하지 않음.
+      robot_radius: 0.1
+      # 격자 한 칸 크기(m/cell). 작게 하면 세밀하지만 메모리/계산량 증가.
+      resolution: 0.05
+      # 미관측 공간을 unknown으로 유지할지 여부.
+      track_unknown_space: true
+      # 실제로 로드할 costmap 레이어 목록. 목록에 없는 블록은 실행되지 않음.
+      plugins:
+      - static_layer
+      - obstacle_layer
+      - voxel_layer
+      - inflation_layer
+      obstacle_layer:
+        # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+        plugin: nav2_costmap_2d::ObstacleLayer
+        # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+        enabled: true
+        # 관측원 이름 목록. 하위 센서 블록 이름과 일치 필요.
+        observation_sources: scan
+        scan:
+          # 해당 센서 입력 토픽. /로 시작하면 절대 이름.
+          topic: /burger2/scan
+          # 장애물로 사용할 최대 높이(m).
+          max_obstacle_height: 2.0
+          # 센서 광선 추적으로 비어 있는 공간의 장애물 비용 제거 여부.
+          clearing: true
+          # 센서 검출점을 장애물로 표시할지 여부.
+          marking: true
+          # 관측 메시지 형식. 현재 LaserScan.
+          data_type: LaserScan
+          # 비어 있는 공간을 지우는 광선 추적 최대 거리(m).
+          raytrace_max_range: 3.0
+          # 광선 추적 최소 거리(m).
+          raytrace_min_range: 0.0
+          # 장애물 표시 최대 거리(m).
+          obstacle_max_range: 2.5
+          # 장애물 표시 최소 거리(m).
+          obstacle_min_range: 0.0
+      voxel_layer:
+        # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+        plugin: nav2_costmap_2d::VoxelLayer
+        # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+        enabled: true
+        # 3D voxel 디버그 지도 발행 여부. 꺼도 voxel 계산 자체는 별개.
+        publish_voxel_map: true
+        # voxel 지도 높이 원점(m).
+        origin_z: 0.0
+        # voxel 높이 한 칸(m).
+        z_resolution: 0.05
+        # 높이 방향 voxel 개수. 구현 지원 상한(보통 16) 확인.
+        z_voxels: 16
+        # 장애물로 사용할 최대 높이(m).
+        max_obstacle_height: 2.0
+        # 열에서 장애물로 투영하기 위한 점유 voxel 개수 기준. 높이면 희소 검출 무시 증가.
+        mark_threshold: 0
+        # 관측원 이름 목록. 하위 센서 블록 이름과 일치 필요.
+        observation_sources: scan
+        scan:
+          # 해당 센서 입력 토픽. /로 시작하면 절대 이름.
+          topic: /burger2/scan
+          # 장애물로 사용할 최대 높이(m).
+          max_obstacle_height: 2.0
+          # 센서 광선 추적으로 비어 있는 공간의 장애물 비용 제거 여부.
+          clearing: true
+          # 센서 검출점을 장애물로 표시할지 여부.
+          marking: true
+          # 관측 메시지 형식. 현재 LaserScan.
+          data_type: LaserScan
+          # 비어 있는 공간을 지우는 광선 추적 최대 거리(m).
+          raytrace_max_range: 3.0
+          # 광선 추적 최소 거리(m).
+          raytrace_min_range: 0.0
+          # 장애물 표시 최대 거리(m).
+          obstacle_max_range: 2.5
+          # 장애물 표시 최소 거리(m).
+          obstacle_min_range: 0.0
+      static_layer:
+        # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+        plugin: nav2_costmap_2d::StaticLayer
+        # 지도의 transient-local QoS 사용. 늦게 시작한 구독자도 저장된 지도 수신.
+        map_subscribe_transient_local: true
+        # TF 허용 시간(s). AMCL은 발행 TF의 미래 유효 시간; 다른 노드는 변환 허용/대기 기준.
+        transform_tolerance: 0.1
+      inflation_layer:
+        # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+        plugin: nav2_costmap_2d::InflationLayer
+        # 장애물 주변 비용 확장 반경(m). 크게 하면 더 넓게 여유 공간을 선호.
+        inflation_radius: 0.2
+        # 팽창 비용의 지수 감쇠율. 크게 하면 비용이 더 빨리 떨어져 장애물에 가까운 경로 가능.
+        cost_scaling_factor: 5.0
+      # true면 전체 지도 발행, false면 증분 발행 활용. 대역폭 영향.
+      always_send_full_costmap: true
+map_server:
+  ros__parameters:
+    # 지도 메타데이터 파일. 기본 실행에서는 launch의 map 인자가 우선 전달됨.
+    yaml_filename: map.yaml
+    frame_id: burger2/map
+map_saver:
+  ros__parameters:
+    # 지도 저장 서비스 제한 시간(s).
+    save_map_timeout: 5.0
+    # 저장 지도에서 자유 공간 분류의 기본 확률 기준.
+    free_thresh_default: 0.25
+    # 저장 지도에서 점유 공간 분류의 기본 확률 기준.
+    occupied_thresh_default: 0.65
+    # 지도의 transient-local QoS 사용. 늦게 시작한 구독자도 저장된 지도 수신.
+    map_subscribe_transient_local: true
+planner_server:
+  ros__parameters:
+    # 경로 계획 속도 기대치(Hz), 느린 계획 경고 기준. 재계획 주기 자체는 BT에서 설정.
+    expected_planner_frequency: 10.0
+    # 로드할 전역 경로 계획기 ID 목록.
+    planner_plugins:
+    - GridBased
+    GridBased:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_navfn_planner::NavfnPlanner
+      # 계획기가 정확한 목표를 못 찾을 때 대체 목표 탐색 허용거리(m). 최종 도착 공차와 별개.
+      tolerance: 0.5
+      # true는 A*, false는 Dijkstra 기반 탐색.
+      use_astar: false
+      # unknown 지도 칸을 통과하는 경로 허용 여부.
+      allow_unknown: true
+behavior_server:
+  ros__parameters:
+    # 동작 서버가 충돌 검사에 사용할 지역 costmap 토픽.
+    local_costmap_topic: local_costmap/costmap_raw
+    # 지역 로봇 외곽선 토픽.
+    local_footprint_topic: local_costmap/published_footprint
+    # 동작 서버의 전역 costmap 토픽.
+    global_costmap_topic: global_costmap/costmap_raw
+    # 전역 로봇 외곽선 토픽.
+    global_footprint_topic: global_costmap/published_footprint
+    # 동작 서버 제어 루프(Hz).
+    cycle_frequency: 10.0
+    # 로드할 회전/후진/대기 등 동작 플러그인 ID 목록.
+    behavior_plugins:
+    - spin
+    - backup
+    - drive_on_heading
+    - wait
+    - assisted_teleop
+    spin:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_behaviors::Spin
+    backup:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_behaviors::BackUp
+    drive_on_heading:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_behaviors::DriveOnHeading
+    wait:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_behaviors::Wait
+    assisted_teleop:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_behaviors::AssistedTeleop
+    # 로컬 동작 기준 TF 프레임.
+    # Spin/BackUp 충돌검사에 전달하는 위치의 좌표계.
+    # 반드시 local_costmap.global_frame과 같아야 함. 현재 map 기준 제어 사용.
+    local_frame: burger2/map
+    # 전역/처리 기준 TF 프레임 이름. 현재 local/global costmap 모두 map 기준.
+    global_frame: burger2/map
+    # 로봇 기준 TF 프레임. 실제 base_link/base_footprint 관계 확인.
+    robot_base_frame: burger2/base_link
+    # TF 변환 대기 제한 시간(s).
+    transform_timeout: 0.1
+    # 동작의 충돌 예측 시간(s). 길면 더 먼 구간 검사.
+    simulate_ahead_time: 2.0
+    # Explicit final-yaw stage: bounded pure rotation with collision checks.
+    max_rotational_vel: 0.924
+    # 동작 서버 최소 회전 속력(rad/s).
+    min_rotational_vel: 0.088
+    # 동작 서버 각가속도 상한(rad/s²).
+    rotational_acc_lim: 0.33
+    # true는 TwistStamped 속도 메시지 사용. 연결된 송수신 노드 모두 형식 일치 필요.
+    enable_stamped_cmd_vel: true
+waypoint_follower:
+  ros__parameters:
+    # Nav2 waypoint follower 액션 상태 확인 주파수(Hz). 사용자 Python 순회기와 별개.
+    loop_rate: 20
+    # Nav2 waypoint follower가 실패한 지점에서 중단할지 여부.
+    stop_on_failure: true
+    # Nav2 waypoint follower의 도착 후 실행 작업 플러그인 ID.
+    waypoint_task_executor_plugin: wait_at_waypoint
+    wait_at_waypoint:
+      # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
+      plugin: nav2_waypoint_follower::WaitAtWaypoint
+      # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+      enabled: true
+      # Nav2 WaitAtWaypoint의 대기 시간(ms). 프로젝트 Python 순회기의 대기값이 아님.
+      waypoint_pause_duration: 200
+collision_monitor:
+  ros__parameters:
+    # 로봇 기준 TF 프레임. 실제 TF 이름과 일치해야 함.
+    base_frame_id: burger2/base_footprint
+    # 오도메트리 TF 프레임 이름.
+    odom_frame_id: burger2/odom
+    # 충돌 감시기 입력 속도 토픽.
+    cmd_vel_in_topic: cmd_vel_smoothed
+    # 충돌 감시기 출력 속도 토픽. 구동계까지 연결 확인.
+    cmd_vel_out_topic: cmd_vel
+    # 충돌 감시 상태 출력 토픽.
+    state_topic: collision_monitor_state
+    # TF 허용 시간(s). AMCL은 발행 TF의 미래 유효 시간; 다른 노드는 변환 허용/대기 기준.
+    transform_tolerance: 0.5
+    # 센서 관측 만료 시간(s). 센서 블록 값이 전역 기본값보다 우선; 0은 만료검사 비활성.
+    source_timeout: 5.0
+    # 관측 시점과 현재 로봇 이동량을 보정할지 여부.
+    base_shift_correction: true
+    # 정지 상태에서 0 속도를 계속 발행할 시간(s). 장애물 무시 후 재출발 시간이 아님.
+    stop_pub_timeout: 2.0
+    # true는 TwistStamped 속도 메시지 사용. 연결된 송수신 노드 모두 형식 일치 필요.
+    enable_stamped_cmd_vel: true
+    # 실시간 스레드 우선순위 사용 여부. OS 권한/스케줄링 설정 필요.
+    use_realtime_priority: false
+    # 실제 충돌 검사 영역 목록. 목록 밖의 PolygonLimit/VelocityPolygonStop은 현재 미사용.
+    polygons:
+    - PolygonStop
+    - PolygonSlow
+    - FootprintApproach
+    PolygonStop:
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: circle
+      # 충돌 검사 원 반경(m), 로봇 기준 원점 중심.
+      radius: 0.1
+      # 영역 감지 시 stop/slowdown/limit/approach 동작 종류.
+      action_type: stop
+      # 영역에 들어온 검출점이 이 개수 이상이면 동작. 높이면 작은 장애물에 덜 민감.
+      min_points: 4
+      # RViz용 영역 표시 토픽 발행 여부. 충돌 검사 활성과 별개.
+      visualize: true
+      # 시각화할 영역 Polygon 토픽.
+      polygon_pub_topic: polygon_stop
+      # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+      enabled: true
+    PolygonSlow:
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: polygon
+      # 로봇 기준 다각형 꼭짓점 [[x,y],…](m). 문자열 형식을 유지.
+      points: '[[0.1, 0.1], [0.1, -0.1], [-0.1, -0.1], [-0.1, 0.1]]'
+      # 영역 감지 시 stop/slowdown/limit/approach 동작 종류.
+      action_type: slowdown
+      # 영역에 들어온 검출점이 이 개수 이상이면 동작. 높이면 작은 장애물에 덜 민감.
+      min_points: 4
+      # 입력속도에 곱하는 감속 비율. 작을수록 더 느림.
+      slowdown_ratio: 0.3
+      # RViz용 영역 표시 토픽 발행 여부. 충돌 검사 활성과 별개.
+      visualize: true
+      # 시각화할 영역 Polygon 토픽.
+      polygon_pub_topic: polygon_slowdown
+      # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+      enabled: true
+    # [현재 미사용] polygons 목록에 없으므로 이 블록만 수정해도 적용되지 않습니다.
+    PolygonLimit:
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: polygon
+      # 로봇 기준 다각형 꼭짓점 [[x,y],…](m). 문자열 형식을 유지.
+      points: '[[0.1, 0.1], [0.1, -0.1], [-0.1, -0.1], [-0.1, 0.1]]'
+      # 영역 감지 시 stop/slowdown/limit/approach 동작 종류.
+      action_type: limit
+      # 영역에 들어온 검출점이 이 개수 이상이면 동작. 높이면 작은 장애물에 덜 민감.
+      min_points: 4
+      # limit 동작의 병진 속력 상한(m/s). 해당 영역이 로드될 때만 유효.
+      linear_limit: 0.4
+      # limit 동작의 각속력 상한(rad/s).
+      angular_limit: 0.5
+      # RViz용 영역 표시 토픽 발행 여부. 충돌 검사 활성과 별개.
+      visualize: true
+      # 시각화할 영역 Polygon 토픽.
+      polygon_pub_topic: polygon_limit
+      # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+      enabled: true
+    FootprintApproach:
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: polygon
+      # 영역 감지 시 stop/slowdown/limit/approach 동작 종류.
+      action_type: approach
+      # approach 검사에 사용하는 실제 로봇 외곽선 토픽.
+      footprint_topic: /burger2/local_costmap/published_footprint
+      # 충돌까지 남겨둘 예측 시간(s). 크게 하면 더 일찍 감속.
+      time_before_collision: 2.0
+      # 접근 충돌 예측 계산 시간 간격(s). 작을수록 계산량 증가.
+      simulation_time_step: 0.02
+      # 영역에 들어온 검출점이 이 개수 이상이면 동작. 높이면 작은 장애물에 덜 민감.
+      min_points: 6
+      # RViz용 영역 표시 토픽 발행 여부. 충돌 검사 활성과 별개.
+      visualize: false
+      # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+      enabled: true
+    # [현재 미사용] polygons 목록에 없으므로 이 블록만 수정해도 적용되지 않습니다.
+    VelocityPolygonStop:
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: velocity_polygon
+      # 영역 감지 시 stop/slowdown/limit/approach 동작 종류.
+      action_type: stop
+      # 영역에 들어온 검출점이 이 개수 이상이면 동작. 높이면 작은 장애물에 덜 민감.
+      min_points: 6
+      # RViz용 영역 표시 토픽 발행 여부. 충돌 검사 활성과 별개.
+      visualize: true
+      # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+      enabled: false
+      # 시각화할 영역 Polygon 토픽.
+      polygon_pub_topic: velocity_polygon_stop
+      # 속도에 따라 선택할 하위 영역 목록. 상위 영역이 로드/활성화되어야 적용.
+      velocity_polygons:
+      - rotation
+      - translation_forward
+      - translation_backward
+      - stopped
+      # 옴니 구동 여부. Burger 차동구동은 false.
+      holonomic: false
+      rotation:
+        # 로봇 기준 다각형 꼭짓점 [[x,y],…](m). 문자열 형식을 유지.
+        points: '[[0.3, 0.3], [0.3, -0.3], [-0.3, -0.3], [-0.3, 0.3]]'
+        # 해당 속도 영역 선택의 최소 선속도(m/s).
+        linear_min: 0.0
+        # 해당 속도 영역 선택의 최대 선속도(m/s).
+        linear_max: 0.05
+        # 해당 속도 영역 선택의 최소 각속도(rad/s).
+        theta_min: -1.0
+        # 해당 속도 영역 선택의 최대 각속도(rad/s).
+        theta_max: 1.0
+      translation_forward:
+        # 로봇 기준 다각형 꼭짓점 [[x,y],…](m). 문자열 형식을 유지.
+        points: '[[0.35, 0.3], [0.35, -0.3], [-0.2, -0.3], [-0.2, 0.3]]'
+        # 해당 속도 영역 선택의 최소 선속도(m/s).
+        linear_min: 0.0
+        # 해당 속도 영역 선택의 최대 선속도(m/s).
+        linear_max: 1.0
+        # 해당 속도 영역 선택의 최소 각속도(rad/s).
+        theta_min: -1.0
+        # 해당 속도 영역 선택의 최대 각속도(rad/s).
+        theta_max: 1.0
+      translation_backward:
+        # 로봇 기준 다각형 꼭짓점 [[x,y],…](m). 문자열 형식을 유지.
+        points: '[[0.2, 0.3], [0.2, -0.3], [-0.35, -0.3], [-0.35, 0.3]]'
+        # 해당 속도 영역 선택의 최소 선속도(m/s).
+        linear_min: -1.0
+        # 해당 속도 영역 선택의 최대 선속도(m/s).
+        linear_max: 0.0
+        # 해당 속도 영역 선택의 최소 각속도(rad/s).
+        theta_min: -1.0
+        # 해당 속도 영역 선택의 최대 각속도(rad/s).
+        theta_max: 1.0
+      stopped:
+        # 로봇 기준 다각형 꼭짓점 [[x,y],…](m). 문자열 형식을 유지.
+        points: '[[0.25, 0.25], [0.25, -0.25], [-0.25, -0.25], [-0.25, 0.25]]'
+        # 해당 속도 영역 선택의 최소 선속도(m/s).
+        linear_min: -1.0
+        # 해당 속도 영역 선택의 최대 선속도(m/s).
+        linear_max: 1.0
+        # 해당 속도 영역 선택의 최소 각속도(rad/s).
+        theta_min: -1.0
+        # 해당 속도 영역 선택의 최대 각속도(rad/s).
+        theta_max: 1.0
+    # 관측원 이름 목록. 하위 센서 블록 이름과 일치 필요.
+    observation_sources:
+    - scan
+    scan:
+      # 센서 관측 만료 시간(s). 센서 블록 값이 전역 기본값보다 우선; 0은 만료검사 비활성.
+      # 실측 0.50~0.75초 관측 지연을 허용; 0.8초 이상 관측 중단 시 정지.
+      source_timeout: 0.8
+      # 도크 플러그인 ID 또는 충돌영역/센서 종류. 소속 블록의 의미에 맞춰 선택.
+      type: scan
+      # 해당 센서 입력 토픽. /로 시작하면 절대 이름.
+      topic: /burger2/scan
+      # 해당 플러그인/영역/관측원 활성 여부. 상위 로딩 목록에 있어야 적용.
+      enabled: true
+velocity_smoother:
+  ros__parameters:
+    # 속도 평활화 출력 주파수(Hz). 제어 루프보다 높게 보간 가능.
+    smoothing_frequency: 30.0
+    # 한 축이 가속 한계에 걸리면 다른 축도 비례 축소해 방향 유지할지 여부.
+    scale_velocities: false
+    # OPEN_LOOP는 이전 명령, CLOSED_LOOP는 odom으로 현재 속도 추정.
+    feedback: OPEN_LOOP
+    # 최대 속도 배열 [vx(m/s), vy(m/s), wz(rad/s)]. DWB 상한과 함께 확인.
+    max_velocity:
+    - 0.08
+    - 0.0
+    - 1.0
+    # 최소 속도 배열 [vx, vy, wz]. 음수는 후진/반대 회전 허용.
+    min_velocity:
+    - -0.08
+    - 0.0
+    - -1.0
+    # 축별 미세 속도를 0 처리하는 크기 [vx,vy,wz].
+    deadband_velocity:
+    - 0.0
+    - 0.0
+    - 0.0
+    # 속도 입력 중단 후 정지까지 시간(s).
+    velocity_timeout: 1.0
+    # 축별 가속도 상한 [x(m/s²),y(m/s²),각(rad/s²)].
+    max_accel:
+    - 0.33
+    - 0.0
+    - 0.33
+    # 축별 감속도 [x,y,각], 음수 값 사용.
+    max_decel:
+    - -0.462
+    - 0.0
+    - -0.88
+    # 오도메트리 입력 토픽.
+    odom_topic: odom
+    # CLOSED_LOOP 속도 추정 평균 시간(s). 현재 OPEN_LOOP에는 피드백용으로 미사용.
+    odom_duration: 0.1
+    # 실시간 스레드 우선순위 사용 여부. OS 권한/스케줄링 설정 필요.
+    use_realtime_priority: false
+    # true는 TwistStamped 속도 메시지 사용. 연결된 송수신 노드 모두 형식 일치 필요.
+    enable_stamped_cmd_vel: true

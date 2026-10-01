@@ -1,0 +1,8 @@
+<library path="precision_pose_critic">
+  <class type="waffle_navigation::PositionApproachCritic" base_class_type="dwb_core::TrajectoryCritic">
+    <description>Position-only steering with zero or effective forward speed.</description>
+  </class>
+  <class type="waffle_navigation::PrecisionPoseCritic" base_class_type="dwb_core::TrajectoryCritic">
+    <description>Forward 5cm approach with joint pose scoring and a latched precision stop.</description>
+  </class>
+</library>

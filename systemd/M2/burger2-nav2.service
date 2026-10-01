@@ -1,0 +1,11 @@
+[Unit]
+Description=burger2 persistent nav2
+Requires=burger2-localization.service burger2-motion-owner.service
+After=burger2-localization.service burger2-motion-owner.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash %h/final_robot_ws/robot/burger2/navigation/launch_nav2.sh
+KillSignal=SIGINT
+TimeoutStopSec=20
+Restart=no

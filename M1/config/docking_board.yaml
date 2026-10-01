@@ -1,0 +1,16 @@
+# User geometry: 30mm sides, 2x2, 10mm edge gaps (40mm center spacing).
+# Rows below: top-left, top-right, bottom-left, bottom-right.
+# Verified from docs/markers/burger2/small_30mm/board_config.json and the supplied PNG.
+# All four markers must be fixed to one flat rigid surface, with distinct IDs.
+# Origin: desired docking center; x right, y up, z out toward the camera.
+# rotation_deg: counterclockwise rotation of the printed marker in the board plane.
+dictionary: DICT_4X4_50
+markers:
+  - {id: 0, length_m: 0.03, center_xy_m: [-0.02, 0.02], rotation_deg: 0.0}
+  - {id: 1, length_m: 0.03, center_xy_m: [0.02, 0.02], rotation_deg: 0.0}
+  - {id: 2, length_m: 0.03, center_xy_m: [-0.02, -0.02], rotation_deg: 0.0}
+  - {id: 3, length_m: 0.03, center_xy_m: [0.02, -0.02], rotation_deg: 0.0}
+# Initial observation thresholds; tune using physical docking measurements.
+max_reprojection_rms_px: 1.5
+lateral_tolerance_m: 0.005
+yaw_tolerance_deg: 2.0

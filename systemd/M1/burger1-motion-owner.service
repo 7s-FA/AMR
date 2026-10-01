@@ -1,0 +1,9 @@
+[Unit]
+Description=burger1 persistent motion-owner
+
+[Service]
+Type=simple
+ExecStart=/bin/bash %h/final_robot_ws/robot/burger1/navigation/launch_owner.sh
+KillSignal=SIGINT
+TimeoutStopSec=20
+Restart=no
