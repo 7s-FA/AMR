@@ -1,7 +1,7 @@
 robot_id: M2
 model: burger
 runtime_namespace: burger2
-action_name: /m2/data
+action_name: /M2/data
 ros_domain_id: 40
 max_linear_mps: 0.066
 max_angular_rps: 0.924

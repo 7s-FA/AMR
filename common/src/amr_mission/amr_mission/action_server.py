@@ -1,6 +1,5 @@
 """M1/M2 action server. RESTART releases a stop latch; it never resumes a goal."""
-import json,math,threading,time,uuid
-from pathlib import Path
+import json,math,threading,time
 import rclpy
 from rclpy.action import ActionServer,GoalResponse,CancelResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -14,19 +13,21 @@ from host_pkg.action import Burger
 from .backend import Backend,ROUTES,validate
 
 class MissionServer(Node):
-    def __init__(self,backend=None):
-        super().__init__('amr_mission_server')
-        self.declare_parameter('robot_id','M2');self.declare_parameter('runtime_robot','burger2')
+    def __init__(self,backend=None,robot_id='M2'):
+        super().__init__('amr_mission_server', namespace=robot_id)
+        self.declare_parameter('robot_id',robot_id);self.declare_parameter('runtime_robot',{'M1':'burger1','M2':'burger2'}[robot_id])
         self.declare_parameter('navigation_dir','');self.declare_parameter('action_name','')
         self.declare_parameter('mission_timeout_s',600.)
         self.robot=self.get_parameter('robot_id').value;runtime=self.get_parameter('runtime_robot').value
         if (self.robot,runtime) not in [('M1','burger1'),('M2','burger2')]:raise ValueError('Robot/profile mismatch')
         self.backend=backend or Backend(self.get_parameter('navigation_dir').value)
-        name=self.get_parameter('action_name').value or '/'+self.robot.lower()+'/data'
+        name=self.get_parameter('action_name').value or '/'+self.robot+'/data'
+        if self.get_namespace()!='/'+self.robot or not name.startswith('/'+self.robot+'/'):
+            raise ValueError('Action namespace must match the uppercase robot ID')
         self.group=ReentrantCallbackGroup();self.lock=threading.RLock()
         self.route_reserved=False;self.control_reserved=False;self.active_id=None
         self.pose=None;self.odom_time=None;self.stationary_since=None;self.direction='FORWARD'
-        self.diagnostics=self.create_publisher(String,'/'+self.robot.lower()+'/mission/diagnostics',10)
+        self.diagnostics=self.create_publisher(String,'/'+self.robot+'/mission/diagnostics',10)
         self.create_subscription(PoseWithCovarianceStamped,'/'+runtime+'/amcl_pose',self.on_pose,qos_profile_sensor_data,callback_group=self.group)
         self.create_subscription(Odometry,'/'+runtime+'/odom',self.on_odom,qos_profile_sensor_data,callback_group=self.group)
         self.action=ActionServer(self,Burger,name,execute_callback=self.execute,goal_callback=self.goal,
@@ -103,13 +104,15 @@ class MissionServer(Node):
                 while rclpy.ok() and time.monotonic()<end:
                     if handle.is_cancel_requested:
                         self.backend.stop('action_cancelled');handle.canceled();return result
-                    if not self.backend.renew(goal_id):raise RuntimeError('STOP_LATCHED_OR_ACTION_OWNERSHIP_LOST')
+                    if not self.backend.authorized(goal_id):raise RuntimeError('STOP_LATCHED_OR_ACTION_OWNERSHIP_LOST')
                     record=self.backend.result(goal_id)
                     if record and record.get('status') in ('success','failed','cancelled'):
                         proof=record.get('result',{})
                         successful=(record['status']=='success' and record.get('stage')=='arrived'
                                     and proof.get('success') is True and proof.get('stopped') is True
-                                    and proof.get('dock_verified') is True)
+                                    and proof.get('terminal_verified') is True
+                                    and proof.get('terminal_mode') in ('dock','park','rest')
+                                    and (proof.get('terminal_mode')=='rest' or proof.get('dock_verified') is True))
                         if not successful:raise RuntimeError(record.get('error','MISSION_FAILED_OR_UNVERIFIED'))
                         break
                     self.feedback(handle);time.sleep(.2)

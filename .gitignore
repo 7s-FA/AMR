@@ -17,3 +17,5 @@
 *.bak_*
 *.before*
 *.pre_intermediate
+
+.test_host_ws/

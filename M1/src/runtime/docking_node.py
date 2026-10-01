@@ -344,7 +344,6 @@ def main():
             recorder = DockingRecorder(args.log_dir, config, [
                 args.config, config['calibration_path'], config['board_path'],
                 __file__, Path(__file__).with_name('docking_control.py'),
-                Path(__file__).with_name('camera_node.py'),
                 Path(__file__).with_name('docking_vision_worker.py')])
         if args.execute:
             # Discover existing owners before creating any motor publisher.

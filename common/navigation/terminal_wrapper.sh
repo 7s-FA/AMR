@@ -18,28 +18,15 @@ if [[ "$MODE" == dock || "$MODE" == park || "$MODE" == rest ]]; then rm -f -- "$
 finish() {
  status=$?
  trap - EXIT
-python3 - "$FILE" "$MODE" "$status" "$LOG_FILE" <<'PY'
-import sys,json,time,os
-from collections import deque
-path,mode,status,log=sys.argv[1:];data={'mode':mode,'status':'success' if status=='0' else 'failed','exit_code':int(status),'completed_unix':time.time(),'log_file':log}
-try:
- with open(log) as stream:lines=deque(stream,maxlen=40)
- for line in lines:
-  try:report=json.loads(line[line.index('{'):])
-  except (ValueError,TypeError):continue
-  if isinstance(report,dict) and 'state' in report and 'reason' in report:
-   data['controller_state']=report['state'];data['reason']=report['reason'];data['controller_report']=report
- if status!='0' and 'reason' not in data:data['reason']=''.join(lines)[-3000:].strip() or 'controller_start_or_cleanup_failed'
-except OSError:
- if status!='0':data['reason']='controller_start_or_cleanup_failed'
-with open(path+'.tmp','w') as f:json.dump(data,f)
-os.replace(path+'.tmp',path)
-PY
+python3 "$HERE/terminal_evidence.py" "$FILE" "$MODE" "$status" "$LOG_FILE"
+report_status=$?
+if (( status == 0 && report_status != 0 )); then status=1; fi
 if (( status == 0 )) && [[ "$MODE" == dock || "$MODE" == park || "$MODE" == rest ]]; then
  temp=$(mktemp "$FLAG.XXXXXX")
  printf 'successful_%s %s\n' "$MODE" "$(date --iso-8601=seconds)" > "$temp"
  mv -- "$temp" "$FLAG"
 fi
+exit "$status"
 }
 trap finish EXIT
 bash "$HERE/set_mode.sh" direct || exit 1

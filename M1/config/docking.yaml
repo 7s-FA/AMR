@@ -24,7 +24,6 @@ network:
   robot_interface: wlan0
 vision:
   # Same camera/output mode as Burger2: 640x480, sensor mode 1640:1232.
-  camera_binary: ~/camera-build/libcamera/build/src/apps/cam/cam
   camera_topic: /burger1/camera/image_raw
   image_width: 640
   image_height: 480
@@ -77,3 +76,11 @@ control:
   max_start_distance_m: 0.9
   min_visual_distance_m: 0.12
   stopped_hold_s: 0.5
+
+# REST is independent of normal/parking docking speed and timeout tuning.
+rest_control:
+  speed_mps: 0.039
+  max_time_s: 90.0
+  odom_timeout_s: 0.3
+  stopped_hold_s: 0.5
+  stop_timeout_s: 3.0

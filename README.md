@@ -2,7 +2,9 @@
 
 M1(기존 Burger1), M2(기존 Burger2) **로봇 내부에서 실행하는 코드**입니다. 호스트가 목적지 명령을 보내면 로봇이 저장된 웨이포인트를 따라 이동하고, 목적지에 맞게 마커 도킹 또는 대기장소 IR 정지를 수행합니다.
 
-호스트의 웹·공정 스케줄러·Action Client는 별도 [host_pc 저장소](https://github.com/7s-FA/host_pc)에서 관리합니다. 이 저장소의 작업 브랜치는 `jh`이며, F1(와플)·M3의 기존 영역은 유지합니다.
+별도 주행 시험용 간단한 CLI는 [tools/test_host](tools/test_host/README.md)에 있습니다. `M2 asm`, `M1 park`처럼 한 경로씩 보낼 수 있습니다.
+
+호스트의 웹·공정 스케줄러·운영 Action Client는 별도 [host_pc 저장소](https://github.com/7s-FA/host_pc)에서 관리합니다. 이 저장소의 작업 브랜치는 `jh`이며, F1(와플)·M3의 기존 영역은 유지합니다.
 
 - [로봇 구분과 동작 흐름](#로봇-구분과-동작-흐름)
 - [파일 구조와 수정 위치](#파일-구조와-수정-위치)
@@ -12,12 +14,12 @@ M1(기존 Burger1), M2(기존 Burger2) **로봇 내부에서 실행하는 코드
 
 ## 로봇 구분과 동작 흐름
 
-2026-10-01 실제 로봇 변경분을 반영했습니다. **일반 도킹은 두 로봇이 같은 공통 코드·설정**을 사용하고 주차·카메라·경로 차이는 프로필에 유지합니다. [이번 변경·검증 기록](docs/robot_sync_2026-10-01.md)
+2026-10-01 실제 로봇 변경분을 반영했습니다. **일반 도킹은 두 로봇이 같은 공통 코드·설정**을 사용하고 주차·카메라·경로 차이는 프로필에 유지합니다. [동기화 기록](docs/robot_sync_2026-10-01.md) · [최신 네임스페이스·정지 판정 수정](docs/namespace_terminal_update_2026-10-01.md)
 
 | 구분 | M1 | M2 |
 |---|---|---|
 | 기존 이름 / 내부 ROS namespace | burger1 | burger2 |
-| 외부 Action 주소 | `/m1/data` | `/m2/data` |
+| 외부 Action 주소 | `/M1/data` | `/M2/data` |
 | ROS 도메인 | 40 | 40 |
 | 주차 경로 | 웨이포인트 1 → 주차 도킹 | **웨이포인트 4 → 바로 주차 도킹** |
 | 주차 마커 ID | 4, 5, 6, 7 | 8, 9, 10, 11 |
@@ -87,11 +89,151 @@ AMR/
 ```
 
 <!-- FULL_TREE_START -->
-<details>
-<summary>전체 파일 구조 펼치기 (Git 관리 파일 기준)</summary>
 
 ```text
 AMR/
+├── F1/
+│   ├── image/
+│   │   └── .gitkeep
+│   ├── map/
+│   │   └── .gitkeep
+│   └── src/
+│       └── .gitkeep
+├── M1/
+│   ├── config/
+│   │   ├── camera.yaml
+│   │   ├── docking.yaml
+│   │   ├── docking_board.yaml
+│   │   ├── nav2.yaml
+│   │   ├── parking_board.yaml
+│   │   ├── robot.yaml
+│   │   ├── routes.yaml
+│   │   └── waypoints.yaml
+│   ├── image/
+│   │   └── .gitkeep
+│   ├── map/
+│   │   ├── .gitkeep
+│   │   ├── factory_map.pgm
+│   │   └── factory_map.yaml
+│   ├── overrides/
+│   │   └── waffle_navigation/
+│   │       ├── config/
+│   │       │   └── waypoints.yaml
+│   │       ├── launch/
+│   │       │   ├── burger1_navigation.launch.py
+│   │       │   └── burger2_navigation.launch.py
+│   │       ├── scripts/
+│   │       │   └── nav2_waypoints.py
+│   │       └── test/
+│   │           ├── test_arrival_recovery.py
+│   │           ├── test_burger2_port.py
+│   │           ├── test_burger2_velocity_samples.py
+│   │           ├── test_directional_waypoints.py
+│   │           ├── test_large_heading_alignment.py
+│   │           ├── test_position_then_yaw.py
+│   │           └── test_precision_tuning.py
+│   ├── runtime_env/
+│   │   ├── burger1_remote.bash
+│   │   ├── pc_burger1_env.bash
+│   │   └── pc_env.bash
+│   ├── src/
+│   │   ├── navigation/
+│   │   │   ├── ensure_docking_ready.sh
+│   │   │   ├── launch_localization.sh
+│   │   │   ├── launch_nav2.sh
+│   │   │   ├── launch_owner.sh
+│   │   │   ├── manage.sh
+│   │   │   ├── mission_entry.sh
+│   │   │   ├── operator_aliases.bash
+│   │   │   ├── run_rest.sh
+│   │   │   ├── run_selected_waypoints.sh
+│   │   │   ├── run_waypoints.sh
+│   │   │   ├── save_start_pose.sh
+│   │   │   ├── set_mode.sh
+│   │   │   └── warm.sh
+│   │   ├── runtime/
+│   │   │   ├── base.launch.py
+│   │   │   ├── camera_profile.sh
+│   │   │   ├── docking_node.py
+│   │   │   ├── docking_recorder.py
+│   │   │   ├── docking_vision_worker.py
+│   │   │   ├── ir_sensor.py
+│   │   │   ├── setup_camera.sh
+│   │   │   ├── start_base.sh
+│   │   │   ├── start_camera.sh
+│   │   │   ├── start_docking.sh
+│   │   │   ├── start_docking_engine.sh
+│   │   │   ├── start_docking_standby.sh
+│   │   │   ├── start_ir.sh
+│   │   │   ├── test_docking_control.py
+│   │   │   ├── test_docking_node.py
+│   │   │   ├── test_docking_recorder.py
+│   │   │   └── test_ported_alignment.py
+│   │   └── .gitkeep
+│   ├── README.md
+│   └── runtime_manifest.json
+├── M2/
+│   ├── config/
+│   │   ├── camera.yaml
+│   │   ├── docking.yaml
+│   │   ├── docking_board.yaml
+│   │   ├── nav2.yaml
+│   │   ├── parking_board.yaml
+│   │   ├── robot.yaml
+│   │   ├── routes.yaml
+│   │   └── waypoints.yaml
+│   ├── image/
+│   │   └── .gitkeep
+│   ├── map/
+│   │   ├── .gitkeep
+│   │   ├── factory_map.pgm
+│   │   └── factory_map.yaml
+│   ├── runtime_env/
+│   │   ├── burger2_remote.bash
+│   │   ├── pc_burger2_env.bash
+│   │   └── pc_env.bash
+│   ├── src/
+│   │   ├── navigation/
+│   │   │   ├── ensure_docking_ready.sh
+│   │   │   ├── launch_localization.sh
+│   │   │   ├── launch_nav2.sh
+│   │   │   ├── launch_owner.sh
+│   │   │   ├── manage.sh
+│   │   │   ├── mission_entry.sh
+│   │   │   ├── motion_trace.py
+│   │   │   ├── operator_aliases.bash
+│   │   │   ├── run_rest.sh
+│   │   │   ├── run_selected_waypoints.sh
+│   │   │   ├── run_waypoints.sh
+│   │   │   ├── save_start_pose.sh
+│   │   │   ├── set_mode.sh
+│   │   │   └── warm.sh
+│   │   ├── runtime/
+│   │   │   ├── base.launch.py
+│   │   │   ├── camera_profile.sh
+│   │   │   ├── docking_node.py
+│   │   │   ├── docking_vision_worker.py
+│   │   │   ├── ir_sensor.py
+│   │   │   ├── setup_camera.sh
+│   │   │   ├── start_base.sh
+│   │   │   ├── start_camera.sh
+│   │   │   ├── start_docking.sh
+│   │   │   ├── start_docking_engine.sh
+│   │   │   ├── start_docking_standby.sh
+│   │   │   ├── start_ir.sh
+│   │   │   ├── test_docking_control.py
+│   │   │   └── test_docking_node.py
+│   │   └── .gitkeep
+│   ├── README.md
+│   └── runtime_manifest.json
+├── M3/
+│   ├── image/
+│   │   └── .gitkeep
+│   ├── map/
+│   │   └── .gitkeep
+│   ├── src/
+│   │   └── .gitkeep
+│   └── README.md
 ├── common/
 │   ├── docking_vision/
 │   │   ├── __init__.py
@@ -125,6 +267,7 @@ AMR/
 │   │   ├── sequence_runner.py
 │   │   ├── start_nav2.sh
 │   │   ├── station_routes.py
+│   │   ├── terminal_evidence.py
 │   │   ├── terminal_wrapper.sh
 │   │   └── watch_ready.sh
 │   ├── network/
@@ -212,16 +355,10 @@ AMR/
 │   ├── commands.md
 │   ├── host_interface.md
 │   ├── known_issues.md
+│   ├── namespace_terminal_update_2026-10-01.md
 │   ├── robot_sync_2026-10-01.md
 │   ├── troubleshooting.md
 │   └── validation.md
-├── F1/
-│   ├── image/
-│   │   └── .gitkeep
-│   ├── map/
-│   │   └── .gitkeep
-│   └── src/
-│       └── .gitkeep
 ├── interfaces/
 │   ├── host_pkg/
 │   │   ├── action/
@@ -229,145 +366,6 @@ AMR/
 │   │   ├── CMakeLists.txt
 │   │   └── package.xml
 │   └── README.md
-├── M1/
-│   ├── config/
-│   │   ├── camera.yaml
-│   │   ├── docking.yaml
-│   │   ├── docking_board.yaml
-│   │   ├── nav2.yaml
-│   │   ├── parking_board.yaml
-│   │   ├── robot.yaml
-│   │   ├── routes.yaml
-│   │   └── waypoints.yaml
-│   ├── image/
-│   │   └── .gitkeep
-│   ├── map/
-│   │   ├── .gitkeep
-│   │   ├── factory_map.pgm
-│   │   └── factory_map.yaml
-│   ├── overrides/
-│   │   └── waffle_navigation/
-│   │       ├── config/
-│   │       │   └── waypoints.yaml
-│   │       ├── launch/
-│   │       │   ├── burger1_navigation.launch.py
-│   │       │   └── burger2_navigation.launch.py
-│   │       ├── scripts/
-│   │       │   └── nav2_waypoints.py
-│   │       └── test/
-│   │           ├── test_arrival_recovery.py
-│   │           ├── test_burger2_port.py
-│   │           ├── test_burger2_velocity_samples.py
-│   │           ├── test_directional_waypoints.py
-│   │           ├── test_large_heading_alignment.py
-│   │           ├── test_position_then_yaw.py
-│   │           └── test_precision_tuning.py
-│   ├── runtime_env/
-│   │   ├── burger1_remote.bash
-│   │   ├── pc_burger1_env.bash
-│   │   └── pc_env.bash
-│   ├── src/
-│   │   ├── navigation/
-│   │   │   ├── ensure_docking_ready.sh
-│   │   │   ├── launch_localization.sh
-│   │   │   ├── launch_nav2.sh
-│   │   │   ├── launch_owner.sh
-│   │   │   ├── manage.sh
-│   │   │   ├── mission_entry.sh
-│   │   │   ├── operator_aliases.bash
-│   │   │   ├── run_rest.sh
-│   │   │   ├── run_selected_waypoints.sh
-│   │   │   ├── run_waypoints.sh
-│   │   │   ├── save_start_pose.sh
-│   │   │   ├── set_mode.sh
-│   │   │   └── warm.sh
-│   │   ├── runtime/
-│   │   │   ├── base.launch.py
-│   │   │   ├── camera_node.py
-│   │   │   ├── camera_profile.sh
-│   │   │   ├── docking_node.py
-│   │   │   ├── docking_recorder.py
-│   │   │   ├── docking_vision_worker.py
-│   │   │   ├── ir_sensor.py
-│   │   │   ├── setup_camera.sh
-│   │   │   ├── start_base.sh
-│   │   │   ├── start_camera.sh
-│   │   │   ├── start_docking.sh
-│   │   │   ├── start_docking_engine.sh
-│   │   │   ├── start_docking_standby.sh
-│   │   │   ├── start_ir.sh
-│   │   │   ├── start_nav_base.sh
-│   │   │   ├── test_camera_node.py
-│   │   │   ├── test_docking_control.py
-│   │   │   ├── test_docking_node.py
-│   │   │   ├── test_docking_recorder.py
-│   │   │   └── test_ported_alignment.py
-│   │   └── .gitkeep
-│   ├── README.md
-│   └── runtime_manifest.json
-├── M2/
-│   ├── config/
-│   │   ├── camera.yaml
-│   │   ├── docking.yaml
-│   │   ├── docking_board.yaml
-│   │   ├── nav2.yaml
-│   │   ├── parking_board.yaml
-│   │   ├── robot.yaml
-│   │   ├── routes.yaml
-│   │   └── waypoints.yaml
-│   ├── image/
-│   │   └── .gitkeep
-│   ├── map/
-│   │   ├── .gitkeep
-│   │   ├── factory_map.pgm
-│   │   └── factory_map.yaml
-│   ├── runtime_env/
-│   │   ├── burger2_remote.bash
-│   │   ├── pc_burger2_env.bash
-│   │   └── pc_env.bash
-│   ├── src/
-│   │   ├── navigation/
-│   │   │   ├── ensure_docking_ready.sh
-│   │   │   ├── launch_localization.sh
-│   │   │   ├── launch_nav2.sh
-│   │   │   ├── launch_owner.sh
-│   │   │   ├── manage.sh
-│   │   │   ├── mission_entry.sh
-│   │   │   ├── motion_trace.py
-│   │   │   ├── operator_aliases.bash
-│   │   │   ├── run_docking_departure_once.sh
-│   │   │   ├── run_rest.sh
-│   │   │   ├── run_selected_waypoints.sh
-│   │   │   ├── run_waypoints.sh
-│   │   │   ├── save_start_pose.sh
-│   │   │   ├── set_mode.sh
-│   │   │   └── warm.sh
-│   │   ├── runtime/
-│   │   │   ├── base.launch.py
-│   │   │   ├── camera_profile.sh
-│   │   │   ├── docking_node.py
-│   │   │   ├── docking_vision_worker.py
-│   │   │   ├── ir_sensor.py
-│   │   │   ├── setup_camera.sh
-│   │   │   ├── start_base.sh
-│   │   │   ├── start_camera.sh
-│   │   │   ├── start_docking.sh
-│   │   │   ├── start_docking_engine.sh
-│   │   │   ├── start_docking_standby.sh
-│   │   │   ├── start_ir.sh
-│   │   │   ├── start_nav_base.sh
-│   │   │   ├── test_docking_control.py
-│   │   │   └── test_docking_node.py
-│   │   └── .gitkeep
-│   ├── README.md
-│   └── runtime_manifest.json
-├── M3/
-│   ├── image/
-│   │   └── .gitkeep
-│   ├── map/
-│   │   └── .gitkeep
-│   └── src/
-│       └── .gitkeep
 ├── patches/
 │   └── encoder/
 │       ├── turtlebot3_node/
@@ -378,9 +376,9 @@ AMR/
 │       │   └── src/
 │       │       └── sensors/
 │       │           └── joint_state.cpp
+│       ├── README.md
 │       ├── encoder_recovery_test.cpp
-│       ├── joint_state.patch
-│       └── README.md
+│       └── joint_state.patch
 ├── scripts/
 │   ├── build.sh
 │   ├── materialize.py
@@ -400,16 +398,26 @@ AMR/
 │   ├── test_action_ros.py
 │   ├── test_backend.py
 │   ├── test_packaging.py
+│   ├── test_rest_and_routes.py
 │   └── test_synced_docking.py
+├── tools/
+│   ├── legacy_camera/
+│   │   ├── M1/
+│   │   │   ├── camera_node.py
+│   │   │   └── test_camera_node.py
+│   │   └── README.md
+│   └── test_host/
+│       ├── README.md
+│       ├── build.sh
+│       ├── client.py
+│       ├── env.bash
+│       └── run.sh
 ├── .gitattributes
 ├── .gitignore
-├── dependencies.repos
-└── README.md
+├── README.md
+└── dependencies.repos
 ```
 
-`.gitkeep`는 빈 디렉터리를 Git에 남기기 위한 파일입니다. `.git/`, 빌드 결과, 로컬 실행 디렉터리는 이 목록에서 제외합니다.
-
-</details>
 <!-- FULL_TREE_END -->
 
 | 변경하려는 내용 | 확인할 파일 |
@@ -457,9 +465,11 @@ AMR/
 
 Action 요청 접수와 목적지 도착은 다릅니다. 호스트는 **최종 Result 성공**을 받은 뒤 다음 공정으로 넘어가야 합니다. 실패·취소 후 정지 래치는 `RESTART`로 해제하며, 원인과 goal ID는 진단 토픽·작업 JSON에 기록됩니다.
 
-호스트 담당자는 동일한 `host_pkg`를 빌드하고 `/m1/data`, `/m2/data`를 사용해야 합니다. 기존 예제의 `move_to_warehouse`는 `GO_TO_MAT`로 바꾸고, speed 값도 백분율로 전달합니다. [호스트 담당자 변경 사항](docs/host_interface.md#host_pc-담당자에게-필요한-변경)
+호스트 담당자는 동일한 `host_pkg`를 빌드하고 `/M1/data`, `/M2/data`를 사용해야 합니다. 기존 예제의 `move_to_warehouse`는 `GO_TO_MAT`로 바꾸고, speed 값도 백분율로 전달합니다. [호스트 담당자 변경 사항](docs/host_interface.md#host_pc-담당자에게-필요한-변경)
 
 ## 설치와 실행 명령어
+
+PC에서 별도 주행 시험을 하려면 [간단한 테스트 호스트 안내](tools/test_host/README.md)를 사용하세요. 로봇은 `process` 모드에서 Action 서버를 실행하고, PC는 `M1`/`M2` 함수로 한 경로씩 요청합니다.
 
 **아래 설치·개별 시험 명령은 해당 로봇의 터미널에서 실행합니다.** 호스트 PC의 기존 `burger2` alias와는 별개입니다. M1과 M2 각각 설치하며, 한 번에 한 로봇의 경로만 시험해도 됩니다.
 
@@ -478,7 +488,7 @@ git clone --branch jh https://github.com/7s-FA/AMR.git "$HOME/AMR"
 ```bash
 ROBOT_ID=M2
 AMR_RUNTIME="$HOME/amr_runtime/$ROBOT_ID"
-AMR_ACTION="/${ROBOT_ID,,}/data"
+AMR_ACTION="/$ROBOT_ID/data"
 if [[ "$ROBOT_ID" == M1 ]]; then
   RUNTIME_ROBOT=burger1
   AMR_CAMERA=final_robot_camera_burger1
@@ -609,18 +619,18 @@ journalctl --user -u "${ROBOT_ID,,}-action.service" \
   -u "$RUNTIME_ROBOT-mission.service" -n 100 --no-pager
 journalctl --user -u "$RUNTIME_ROBOT-base.service" \
   -u "$RUNTIME_ROBOT-nav2.service" -n 100 --no-pager
-ros2 topic echo "/${ROBOT_ID,,}/mission/diagnostics"
+ros2 topic echo "/$ROBOT_ID/mission/diagnostics"
 ```
 
 | 기록 | 생성 위치 |
 |---|---|
 | 경로 명령별 결과 | `$AMR_RUNTIME/final_robot_ws/data/$RUNTIME_ROBOT/commands/` |
 | 종단 도킹·대기 로그 | `$AMR_RUNTIME/final_robot_ws/data/$RUNTIME_ROBOT/terminal_logs/` |
-| Action 상세 원인 | `/${ROBOT_ID,,}/mission/diagnostics` 토픽과 Action 서비스 journal |
+| Action 상세 원인 | `/$ROBOT_ID/mission/diagnostics` 토픽과 Action 서비스 journal |
 
 ## 검증과 관련 문서
 
-최신 동기화 후 자동 검사 **556개**와 M1·M2의 Nav2·Action 인터페이스·Action 서버 빌드가 통과했습니다. 새 Action 연동·속도 제한의 **실제 로봇 통합 주행 검증은 남아 있습니다.** 기존 본체의 `stack smashing detected` / 종료 코드 `-6` 문제도 해결된 것으로 표시하지 않습니다.
+이번 네임스페이스·완료 판정·테스트 호스트 변경은 자동 테스트 **43개**를 실행해 통과했습니다(추가 정밀 확인 2개 포함, 한도 50개). 이전 동기화의 556개 검사·빌드 기록은 별도 이력으로 보관합니다. 새 Action 연동·속도 제한의 **실제 로봇 통합 주행 검증은 남아 있습니다.** 기존 본체의 `stack smashing detected` / 종료 코드 `-6` 문제도 해결된 것으로 표시하지 않습니다.
 
 | 문서 | 내용 |
 |---|---|
@@ -645,7 +655,7 @@ ros2 topic echo "/${ROBOT_ID,,}/mission/diagnostics"
 
 ```bash
 python3 scripts/update_manifest.py
-python3 -m pytest -q tests/test_action_contract.py tests/test_backend.py tests/test_packaging.py tests/test_synced_docking.py
+python3 -m pytest -q tests/test_rest_and_routes.py tests/test_backend.py tests/test_packaging.py
 # host_pkg와 amr_mission 빌드 환경을 source한 테스트 PC에서 실행
 ROS_DOMAIN_ID=232 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   python3 -m pytest -q tests/test_action_ros.py

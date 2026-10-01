@@ -6,10 +6,11 @@
 
 | 항목 | M1 | M2 |
 |---|---|---|
-| Action Server | `/m1/data` | `/m2/data` |
+| Action Server | `/M1/data` | `/M2/data` |
 | 타입 | `host_pkg/action/Burger` | 동일 |
-| 내부 ROS namespace | `burger1` | `burger2` |
-| 진단 토픽 | `/m1/mission/diagnostics` | `/m2/mission/diagnostics` |
+| Action 노드 namespace | `/M1` | `/M2` |
+| 내부 센서·Nav2 namespace | `burger1` | `burger2` |
+| 진단 토픽 | `/M1/mission/diagnostics` | `/M2/mission/diagnostics` |
 | ROS domain | 40 | 40 |
 
 호스트도 이 저장소의 `interfaces/host_pkg`와 동일 버전의 패키지를 빌드해야 합니다. 타입명을 임의로 `amr_interfaces`로 바꾸지 않았습니다. 2026-10-01 확인한 host_pc/main에는 실제 `.action` 파일이 없었고 클라이언트는 `host_pkg.action.Burger`를 import하고 있었습니다.
@@ -54,10 +55,16 @@ Action 취소·서버 종료·작업 실패도 정지 래치를 설정합니다.
 
 ## host_pc 담당자에게 필요한 변경
 
-1. 현재 `/burger1/data`, `/burger2/data`를 `/m1/data`, `/m2/data`로 변경하거나 로봇의 `action_name` 매개변수로 기존 주소를 명시합니다. 주소 두 개를 동시에 띄우지는 않습니다.
+1. 현재 `/burger1/data`, `/burger2/data`를 `/M1/data`, `/M2/data`로 변경합니다. 로봇 Action 노드도 `/M1`, `/M2` namespace에서 실행되며, 다른 로봇 namespace의 주소는 거부합니다.
 2. 예제 `move_to_warehouse` 문자열을 `GO_TO_MAT`로 변경합니다.
 3. 예제 speed=1.5/5를 m/s로 해석하면 안 됩니다. 실제 사용할 백분율을 보냅니다.
 4. 접수 성공 로그와 실제 Result 성공을 구분합니다. 공정의 다음 단계는 최종 Result로 진행합니다.
 5. 서로 다른 인터페이스 패키지를 따로 작성하지 않고 이 `Burger.action`을 동일하게 빌드합니다.
 
 참조한 호스트 파일: [burger1_node.py](https://github.com/7s-FA/host_pc/blob/9c251a055223041c814c0088b35df7c1b216de4d/burger1_node.py), [burger2_node.py](https://github.com/7s-FA/host_pc/blob/9c251a055223041c814c0088b35df7c1b216de4d/burger2_node.py), [control.py](https://github.com/7s-FA/host_pc/blob/9c251a055223041c814c0088b35df7c1b216de4d/control.py). 호스트 저장소 코드는 이번 작업에서 수정하지 않았습니다.
+
+## 종단 완료 근거
+
+경로의 끝 동작은 `config/routes.yaml`의 `terminal`에서 선택합니다. 일반/주차 도킹은 컨트롤러의 `DOCKED / ir_high_and_stationary` 보고가 필요합니다. REST는 IR HIGH 후 최신 odom(0.3초 이내)으로 0.5초 연속 정지를 확인해야 성공합니다. 정지 확인은 최대 3초이며 IR 해제·odom 끊김은 실패합니다. REST 속도와 제한은 `docking.yaml`의 독립된 `rest_control`에서 관리합니다. 프로세스 종료 코드 0만으로 도착 성공을 만들지 않습니다.
+
+[별도 테스트 호스트](../tools/test_host/README.md)도 같은 Action을 사용합니다.

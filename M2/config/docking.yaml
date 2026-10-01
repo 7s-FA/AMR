@@ -75,3 +75,11 @@ control:
   max_start_distance_m: 0.9
   min_visual_distance_m: 0.12
   stopped_hold_s: 0.5
+
+# REST is independent of normal/parking docking speed and timeout tuning.
+rest_control:
+  speed_mps: 0.039
+  max_time_s: 90.0
+  odom_timeout_s: 0.3
+  stopped_hold_s: 0.5
+  stop_timeout_s: 3.0

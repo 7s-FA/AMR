@@ -12,12 +12,13 @@ from host_pkg.action import Burger
 from amr_mission.action_server import MissionServer
 
 class FakeBackend:
-    def __init__(self):self.estop=False;self.busy=False;self.mode='process';self.submissions=[];self.done=False;self.renewed=0
+    def __init__(self):self.estop=False;self.busy=False;self.mode='process';self.submissions=[];self.done=False;self.renewed=0;self.verified=True
     def preflight(self):
         if self.estop or self.busy or self.mode!='process':raise RuntimeError('blocked')
     def submit(self,command,speed,goal_id):self.preflight();self.busy=True;self.submissions.append((command,speed,goal_id))
     def renew(self,goal_id):self.renewed+=1;return not self.estop
-    def result(self,goal_id):return {'status':'success','stage':'arrived','result':{'success':True,'stopped':True,'dock_verified':True}} if self.done else {'status':'running'}
+    def authorized(self,goal_id):return not self.estop
+    def result(self,goal_id):return {'status':'success','stage':'arrived','result':{'success':True,'stopped':True,'dock_verified':self.submissions[-1][0]!='GO_TO_REST','terminal_verified':self.verified,'terminal_mode':'rest' if self.submissions[-1][0]=='GO_TO_REST' else 'dock'}} if self.done else {'status':'running'}
     def stop(self,reason='stop'):self.estop=True;self.busy=False
     def restart(self):
         assert not self.busy
@@ -29,13 +30,16 @@ def wait(f,timeout=5):
     while not f.done() and time.monotonic()<end:time.sleep(.01)
     assert f.done(),'future timeout';return f.result()
 
-@pytest.fixture
-def rig():
-    rclpy.init();backend=FakeBackend();server=MissionServer(backend);io=Node('amr_contract_test_client')
-    client=ActionClient(io,Burger,'/m2/data');odom=io.create_publisher(Odometry,'/burger2/odom',10);pose=io.create_publisher(PoseWithCovarianceStamped,'/burger2/amcl_pose',10)
+@pytest.fixture(params=['M1','M2'])
+def rig(request):
+    robot=request.param;runtime='burger'+robot[-1]
+    rclpy.init();backend=FakeBackend();server=MissionServer(backend,robot_id=robot);
+    assert server.get_namespace()=='/'+robot
+    io=Node('amr_contract_test_client')
+    client=ActionClient(io,Burger,'/'+robot+'/data');odom=io.create_publisher(Odometry,'/'+runtime+'/odom',10);pose=io.create_publisher(PoseWithCovarianceStamped,'/'+runtime+'/amcl_pose',10)
     def sensors():
         o=Odometry();o.header.stamp=io.get_clock().now().to_msg();o.pose.pose.orientation.w=1.;odom.publish(o)
-        p=PoseWithCovarianceStamped();p.header.stamp=o.header.stamp;p.header.frame_id='burger2/map';p.pose.pose.position.x=.4;p.pose.pose.position.y=-.2;p.pose.pose.orientation.w=1.;pose.publish(p)
+        p=PoseWithCovarianceStamped();p.header.stamp=o.header.stamp;p.header.frame_id=runtime+'/map';p.pose.pose.position.x=.4;p.pose.pose.position.y=-.2;p.pose.pose.orientation.w=1.;pose.publish(p)
     io.create_timer(.03,sensors);ex=MultiThreadedExecutor(num_threads=6);ex.add_node(io);ex.add_node(server);t=threading.Thread(target=ex.spin);t.start();assert client.wait_for_server(timeout_sec=3);time.sleep(.5)
     try:yield backend,client,server
     finally:
@@ -67,3 +71,24 @@ def test_old_host_example_command_rejected(rig):
 
 def test_individual_mode_rejects_host_route(rig):
     backend,client,_=rig;backend.mode='individual';assert not goal(client,'GO_TO_MAT').accepted
+
+
+def test_rest_completion_and_unverified_terminal(rig):
+    backend,client,_=rig
+    g=goal(client,'GO_TO_REST');backend.done=True
+    assert wait(g.get_result_async()).result.success
+    backend.done=False;backend.verified=False
+    g=goal(client,'GO_TO_ASM');backend.done=True
+    assert not wait(g.get_result_async()).result.success
+
+
+def test_standalone_host_cli_end_to_end(rig):
+    import subprocess
+    import sys
+    from pathlib import Path
+    backend,_,server=rig;backend.done=True
+    client=Path(__file__).resolve().parents[1]/'tools/test_host/client.py'
+    result=subprocess.run([sys.executable,str(client),server.robot,'asm','--speed','50'],capture_output=True,text=True,timeout=25)
+    assert result.returncode==0,result.stdout+result.stderr
+    assert '"success": true' in result.stdout
+    assert backend.submissions[0][:2]==('GO_TO_ASM',50.)

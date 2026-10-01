@@ -88,7 +88,7 @@ def main():
                     print('High-rate camera: three fresh detections confirmed',flush=True)
                     if req.get('log_dir'):
                         from docking_recorder import DockingRecorder
-                        recorder=DockingRecorder(req['log_dir'],cfg,[a.config,cfg['calibration_path'],cfg['board_path'],Path(a.config).with_name('docking_node.py'),Path(a.config).with_name('docking_control.py'),Path(a.config).with_name('camera_node.py'),Path(a.config).with_name('docking_vision_worker.py')])
+                        recorder=DockingRecorder(req['log_dir'],cfg,[a.config,cfg['calibration_path'],cfg['board_path'],Path(a.config).with_name('docking_node.py'),Path(a.config).with_name('docking_control.py'),Path(a.config).with_name('docking_vision_worker.py')])
                     gpio=GPIOInput(cfg['gpio_chip'],cfg['gpio_pin'])
                     args=(cfg,gpio,True,True,vision.channel)
                     node=DockingNode(*args,recorder=recorder) if recorder else DockingNode(*args);node.vision_health=vision.health

@@ -37,8 +37,3 @@ terminal:
   asm: dock
   park: park
   rest: rest
-parking_marker_ids:
-- 4
-- 5
-- 6
-- 7

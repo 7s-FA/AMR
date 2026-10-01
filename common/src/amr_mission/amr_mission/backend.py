@@ -1,5 +1,5 @@
 """Call the robot's existing admission point; no SSH or host dependency."""
-import importlib.util,json,math,subprocess,sys,time
+import json,math,subprocess,sys,time
 from pathlib import Path
 
 ROUTES={'GO_TO_MAT':'mat','GO_TO_ASM':'asm','GO_TO_REST':'rest','GO_TO_PARK':'park'}
@@ -45,10 +45,16 @@ class Backend:
             try:return self.op.submit(ROUTES[command],source='host',task_id=goal_id)
             except Exception:
                 self.atomic(self.path,{'estop':True,'reason':'submit_failed'});raise
+    def authorized(self,goal_id):
+        with self.op.lock():
+            return self._authorized(self.load_gate(self.path),goal_id)
+    @staticmethod
+    def _authorized(g,goal_id):
+        return bool(g and not g.get('estop',True) and g.get('goal_id')==goal_id)
     def renew(self,goal_id):
         with self.op.lock():
             g=self.load_gate(self.path)
-            if not g or g.get('estop',True) or g.get('goal_id')!=goal_id:return False
+            if not self._authorized(g,goal_id):return False
             g['heartbeat']=time.monotonic();self.atomic(self.path,g);return True
     def result(self,goal_id):
         # A failed service or unfinished record is handled by Operation.current().

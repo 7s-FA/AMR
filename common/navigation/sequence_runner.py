@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Station mission: waypoint route -> direct terminal action, never skip failed steps."""
-import argparse,json,os,re,signal,subprocess,time
+import argparse,json,re,signal,subprocess,time
+import yaml
+from station_routes import terminal_mode
+from terminal_evidence import arrival_result
 from collections import deque
 from pathlib import Path
 
@@ -28,10 +31,12 @@ def run_step(command):
         raise RuntimeError(f'{Path(command[1]).name} 실패 (종료 코드 {code}):\n{reason or "상세 출력 없음"}')
 
 class Sequence:
-    def __init__(self,run,terminal):self.run,self.terminal=run,terminal
+    def __init__(self,run,terminal,stations):self.run,self.terminal,self.stations=run,terminal,stations
     def execute(self,destination):
+        mode=terminal_mode(self.stations,destination)
         self.run(['run_selected_waypoints.sh',destination])
-        self.terminal({'mat':'dock','asm':'dock','park':'park','rest':'rest'}[destination])
+        self.terminal(mode)
+        return mode
 
 def collision_failure_snapshot(here, data, robot, task_id, error, run=subprocess.run):
     if not re.search(r'\bNav2 error_code=703(?:,|\s|$)', error):
@@ -88,8 +93,11 @@ def main():
             time.sleep(.15)
         raise RuntimeError('종단 이동 완료 시간 초과')
     try:
-        Sequence(run,terminal).execute(a.destination)
-        write('arrived','success',result={'success':True,'stopped':True,'dock_verified':True,'station_id':STATIONS[a.destination]},terminal_evidence=json.loads(terminal_file.read_text()));print(label+' 도착 완료',flush=True)
+        stations=yaml.safe_load((here/'station_routes.yaml').read_text())
+        mode=Sequence(run,terminal,stations).execute(a.destination)
+        evidence=json.loads(terminal_file.read_text())
+        proof=arrival_result(mode,evidence);proof['station_id']=STATIONS[a.destination]
+        write('arrived','success',result=proof,terminal_evidence=evidence);print(label+' 도착 완료',flush=True)
         atomic_json(data/'station_state.json',{'station':a.destination,'completed_unix':time.time()})
         return 0
     except BaseException as e:
