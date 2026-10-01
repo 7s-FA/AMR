@@ -1,0 +1,124 @@
+image_width: 640
+image_height: 480
+camera_name: burger1_camera_same_as_burger2
+camera_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 507.4926884100038
+  - 0.0
+  - 317.3118465708226
+  - 0.0
+  - 507.17012604398906
+  - 233.7222886187568
+  - 0.0
+  - 0.0
+  - 1.0
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data:
+  - 0.14055886918418725
+  - 0.24951532153371953
+  - -0.0037721118004554197
+  - 0.0015942566409912345
+  - -1.9718900052156203
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+projection_matrix:
+  rows: 3
+  cols: 4
+  data:
+  - 507.4926884100038
+  - 0.0
+  - 317.3118465708226
+  - 0.0
+  - 0.0
+  - 507.17012604398906
+  - 233.7222886187568
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  - 0.0
+rms_px: 0.34919332681831805
+per_view_rms_px:
+- 0.09376552700996399
+- 0.08124686032533646
+- 0.09000641852617264
+- 0.09170086681842804
+- 1.732754111289978
+- 0.22545917332172394
+- 0.1382598727941513
+- 0.15591061115264893
+- 0.14389178156852722
+- 0.18972714245319366
+- 0.14297808706760406
+- 0.18654794991016388
+- 0.16214559972286224
+- 0.16290560364723206
+- 0.1484428495168686
+- 0.15681378543376923
+- 0.16760024428367615
+- 0.15157020092010498
+- 0.14342758059501648
+- 0.13924318552017212
+- 0.15456785261631012
+- 0.1539260596036911
+- 0.1427120715379715
+- 0.14114655554294586
+- 0.14777472615242004
+- 0.15598736703395844
+- 0.13140703737735748
+- 0.14858371019363403
+- 0.15211685001850128
+- 0.17471706867218018
+corner_refinement: spacing_limited_subpix_v1
+board:
+  cols: 6
+  rows: 9
+  square_m: 0.025
+accepted_images:
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134042392856333.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134080385988498.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134081476189085.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134081954387743.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134083212360019.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134083647842400.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134085195774826.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134085383709654.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134085611712815.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134086858811874.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134087093698179.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134087221816511.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134089484276525.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134089667782258.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134089849367353.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134091082799695.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134091267345960.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134091444952426.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134093723635434.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134093962661449.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134094140801687.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134095220186088.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134095422272226.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134095543851874.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134097429300582.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134097577387133.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134097721923785.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134102380559817.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134102549450249.png
+- data/burger2/calibration_images_25mm_6x9_fullfov/checkerboard_1790134105398123867.png
+rejected_images: []

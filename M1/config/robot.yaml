@@ -1,0 +1,7 @@
+robot_id: M1
+model: burger
+runtime_namespace: burger1
+action_name: /m1/data
+ros_domain_id: 40
+max_linear_mps: 0.066
+max_angular_rps: 0.924

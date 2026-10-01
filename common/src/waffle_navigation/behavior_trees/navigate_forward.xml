@@ -1,0 +1,16 @@
+<!-- Position-only navigation. The waypoint client stops, then aligns yaw via Spin.
+     No automatic recovery may override the requested travel direction. -->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateWithReplanning">
+      <!-- hz는 경로 재계획 빈도이며 planner expected_planner_frequency와 다릅니다. -->
+      <RateController hz="1.0">
+        <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"
+                           error_code_id="{compute_path_error_code}"/>
+      </RateController>
+      <!-- controller_id와 goal_checker_id는 Burger1 Nav2 YAML의 등록 ID와 일치해야 합니다. -->
+      <FollowPath path="{path}" controller_id="FollowPositionForward" goal_checker_id="position_goal_checker"
+                  error_code_id="{follow_path_error_code}"/>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

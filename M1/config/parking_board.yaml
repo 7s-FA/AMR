@@ -1,0 +1,29 @@
+dictionary: DICT_4X4_50
+markers:
+- id: 4
+  length_m: 0.03
+  center_xy_m:
+  - -0.02
+  - 0.02
+  rotation_deg: 0.0
+- id: 5
+  length_m: 0.03
+  center_xy_m:
+  - 0.02
+  - 0.02
+  rotation_deg: 0.0
+- id: 6
+  length_m: 0.03
+  center_xy_m:
+  - -0.02
+  - -0.02
+  rotation_deg: 0.0
+- id: 7
+  length_m: 0.03
+  center_xy_m:
+  - 0.02
+  - -0.02
+  rotation_deg: 0.0
+max_reprojection_rms_px: 1.5
+lateral_tolerance_m: 0.005
+yaw_tolerance_deg: 2.0

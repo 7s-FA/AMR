@@ -1,0 +1,44 @@
+# Coordinates use canonical waypoints; headings are degrees.
+# Parking yaw 180 inferred from saved parking poses; ArUco aligns finally.
+variants:
+  way1_mat:
+    waypoint: 1
+    face_waypoint: 2
+  way2_mat:
+    waypoint: 2
+    yaw_deg: 90.760873754
+  way3_asm:
+    waypoint: 3
+    yaw_deg: 0
+  way1_park:
+    waypoint: 1
+    yaw_deg: 180
+  way3_exit:
+    waypoint: 3
+    face_waypoint: 4
+  way4_park:
+    waypoint: 4
+    yaw_deg: 180
+  way4_rest:
+    waypoint: 4
+    yaw_deg: 270
+routes:
+  mat:
+  - way1_mat
+  - way2_mat
+  asm:
+  - way3_asm
+  park:
+  - way4_park
+  rest:
+  - way4_rest
+terminal:
+  mat: dock
+  asm: dock
+  park: park
+  rest: rest
+parking_marker_ids:
+- 8
+- 9
+- 10
+- 11

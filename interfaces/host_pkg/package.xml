@@ -1,0 +1,2 @@
+<?xml version="1.0"?>
+<package format="3"><name>host_pkg</name><version>0.1.0</version><description>Shared host and robot command contract.</description><maintainer email="jonghyeon9084@gmail.com">Jonghyeon Lee</maintainer><license>Apache-2.0</license><buildtool_depend>ament_cmake</buildtool_depend><build_depend>rosidl_default_generators</build_depend><exec_depend>rosidl_default_runtime</exec_depend><member_of_group>rosidl_interface_packages</member_of_group><export><build_type>ament_cmake</build_type></export></package>

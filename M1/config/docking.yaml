@@ -1,0 +1,79 @@
+# M1 로봇 내부 도킹 설정. scripts/materialize.py로 실행 디렉터리에 반영.
+# 설정 변경 후 실행 디렉터리를 새로 생성하고 도킹 프로세스를 다시 시작한다.
+# 거리 단위 m: 0.25 = 25cm, 0.005 = 5mm. 속도 m/s: 0.03 = 3cm/s.
+# 실제 IR 정지 위치는 미정. 아래 거리·속도는 실측 전 초기값이며 확정값이 아니다.
+# --mode normal (default): common IDs 0-3; --mode parking: this robot's station.
+board_file: docking_board.yaml
+parking_board_file: parking_board.yaml
+# Parking alignment target only; normal docking keeps control.staging_distance_m.
+parking_control:
+  board_normal_tracking: false  # Preserve the existing parking algorithm.
+  inverse_yaw_speed: false  # Keep parking steering unchanged.
+  staging_distance_m: 0.30
+  # 기존 파킹 회전 동작은 유지. 아래 원거리/근거리 조정은 일반 도킹용.
+  max_angular_rps: 0.234
+  near_angular_rps: 0.234
+  steering_accel_rps2: 1000.0
+  far_steering_gain: 1.0
+  angular_speed_scale: 1.0
+  aligned_hold_s: 0.7
+# 호스트에는 검출 결과 영상·상태만 보낸다. 검출/제어는 모두 로봇 내부 실행.
+# IP 주소는 시작할 때 인터페이스에서 읽으므로 DHCP 변경 시 자동 반영된다.
+network:
+  host_interface: enp3s0
+  robot_interface: wlan0
+vision:
+  # Same camera/output mode as Burger2: 640x480, sensor mode 1640:1232.
+  camera_binary: ~/camera-build/libcamera/build/src/apps/cam/cam
+  camera_topic: /burger1/camera/image_raw
+  image_width: 640
+  image_height: 480
+  calibration_file: camera.yaml
+  preview_topic: /burger1/docking/annotated/compressed
+  preview_fps: 3.0  # PC 표시 전용; detector remains full rate during docking
+  preview_jpeg_quality: 70
+gpio_chip: /dev/gpiochip4
+gpio_pin: 17
+camera_frame: burger1_camera_optical_frame
+cmd_topic: /burger1/cmd_vel_direct
+motor_state_topic: /burger1/sensor_state
+motor_power_service: /burger1/motor_power
+odom_topic: /burger1/odom
+base_frame: burger1/base_footprint
+max_image_age_s: 0.5
+control:
+  board_normal_tracking: true  # Track the board-normal line with a bounded heading.
+  inverse_yaw_speed: true  # Larger yaw error lowers the steering speed ceiling.
+  # 카메라 장착: 앞쪽 정방향·좌우 중앙은 사용자 확인. 앞뒤 오프셋은 미실측.
+  camera_forward_m: 0.0  # 로봇 회전 중심보다 앞에 있으면 +, 뒤면 -
+  camera_left_m: 0.0     # 로봇 중앙보다 왼쪽이면 +, 오른쪽이면 -
+  camera_yaw_deg: 0.0    # 로봇 정면보다 왼쪽을 보면 +
+  # 가장 자주 조정할 값: 직진 전환 거리, 직진 속도, 허용 오차.
+  staging_distance_m: 0.25
+  lateral_tolerance_m: 0.005
+  yaw_tolerance_deg: 2.0
+  aligned_hold_s: 0.4
+  align_speed_mps: 0.039
+  final_speed_mps: 0.039
+  # 일반 도킹 회전 명령·가속을 기존의 60%로 적용 (최대 0.192 rad/s).
+  angular_speed_scale: 0.6
+  max_angular_rps: 0.32
+  # 원거리 보정은 크게, 가까운 거리에서는 회전 세기를 줄이고 급반전을 완화
+  near_angular_rps: 0.16
+  steering_accel_rps2: 0.8
+  min_angular_rps: 0.03
+  observation_timeout_s: 0.5
+  # 영상 지연 시 ALIGN에서만 정지 대기 후 새 마커·정지 상태를 확인하여 재개
+  vision_recovery_timeout_s: 2.0
+  vision_recovery_hold_s: 0.3
+  vision_recovery_fresh_s: 0.25
+  max_vision_recoveries: 3
+  odom_timeout_s: 0.3
+  ir_timeout_s: 0.1
+  max_final_distance_m: 0.3
+  max_final_time_s: 12.0
+  max_total_distance_m: 1.0
+  max_total_time_s: 90.0
+  max_start_distance_m: 0.9
+  min_visual_distance_m: 0.12
+  stopped_hold_s: 0.5
