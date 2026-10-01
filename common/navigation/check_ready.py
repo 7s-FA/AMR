@@ -16,6 +16,7 @@ def main():
  if not a.force_parked and read(ready).get('boot')==boot and read(ready).get('pid')==pid and pid!='0':return 0
  import rclpy,yaml
  from lifecycle_msgs.srv import GetState
+ from nav2_msgs.srv import SetInitialPose
  from geometry_msgs.msg import PoseWithCovarianceStamped
  from tf2_ros import Buffer,TransformListener
  rclpy.init(args=['--ros-args','-r','/tf:=/'+a.robot+'/tf','-r','/tf_static:=/'+a.robot+'/tf_static']);n=rclpy.create_node('station_ready_check',namespace='/'+a.robot)
@@ -50,17 +51,23 @@ def main():
      data.mkdir(parents=True,exist_ok=True);(data/'departure_pending').write_text('confirmed existing own parking location\n')
    else:
     cfg=yaml.safe_load((root/'host_ws/src/waffle_navigation/config'/('nav2_'+a.robot+'_params.yaml')).read_text())
-    pose=cfg['amcl']['ros__parameters']['initial_pose'];pub=n.create_publisher(PoseWithCovarianceStamped,'initialpose',1)
+    pose=cfg['amcl']['ros__parameters']['initial_pose'];initial=n.create_client(SetInitialPose,'set_initial_pose')
     deadline=time.monotonic()+8
-    while pub.get_subscription_count()==0 and time.monotonic()<deadline:rclpy.spin_once(n,timeout_sec=.1)
-    if pub.get_subscription_count()==0:raise RuntimeError('AMCL 초기 위치 수신 연결 없음')
+    while not initial.wait_for_service(timeout_sec=.2) and time.monotonic()<deadline:rclpy.spin_once(n,timeout_sec=.05)
+    if not initial.service_is_ready():raise RuntimeError('AMCL 초기 위치 서비스 연결 없음')
     msg=PoseWithCovarianceStamped();msg.header.frame_id=a.robot+'/map'
     # A zero timestamp requests the latest transform, avoiding future-time warnings.
     msg.pose.pose.position.x=float(pose['x']);msg.pose.pose.position.y=float(pose['y']);msg.pose.pose.position.z=float(pose.get('z',0))
     msg.pose.pose.orientation.z=math.sin(float(pose['yaw'])/2);msg.pose.pose.orientation.w=math.cos(float(pose['yaw'])/2)
-    msg.pose.covariance[0]=.25;msg.pose.covariance[7]=.25;msg.pose.covariance[35]=.06853891945200942;sent=time.monotonic();pub.publish(msg)
+    msg.pose.covariance[0]=.25;msg.pose.covariance[7]=.25;msg.pose.covariance[35]=.06853891945200942;sent=time.monotonic()
+    # A service acknowledgment confirms receipt; an endpoint count alone does not.
+    request=SetInitialPose.Request();request.pose=msg
+    applied=initial.call_async(request)
+    rclpy.spin_until_future_complete(n,applied,timeout_sec=5)
+    if not applied.done() or applied.result() is None:
+     raise RuntimeError('AMCL 초기 위치 적용 응답 없음: 자동 재전송하지 않습니다.')
     # Wait for AMCL acknowledgment through fresh map -> base TF.
-    deadline=time.monotonic()+8;valid=False
+    deadline=time.monotonic()+12;valid=False
     while time.monotonic()<deadline:
      rclpy.spin_once(n,timeout_sec=.1)
      if ack and ack[-1][0]>=sent and fresh_pose() is not None:

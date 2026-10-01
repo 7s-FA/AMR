@@ -23,8 +23,8 @@ from sensor_msgs.msg import Image
 import yaml
 
 
-def read_frames(stream, frames, stamp, width=640, height=480):
-    size = width * height * 4
+def read_frames(stream, frames, stamp, width=1920, height=1080):
+    size = width * height * 3
     with stream:
         while True:
             data = stream.read(size)
@@ -38,9 +38,9 @@ def read_frames(stream, frames, stamp, width=640, height=480):
             frames.put_nowait(item)
 
 
-def image_message(data, stamp, frame_id, width=640, height=480):
-    pixels = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 4)
-    if (width, height) != (640, 480):
+def image_message(data, stamp, frame_id, width=1920, height=1080):
+    pixels = np.frombuffer(data, dtype=np.uint8).reshape(height, width, 3)
+    if (width, height) != (640, 360):
         pixels = cv2.resize(pixels, (640, 360), interpolation=cv2.INTER_AREA)
     pixels = pixels[:, :, :3]
     msg = Image()
@@ -59,6 +59,8 @@ def main():
     # Avoid competing OpenCV worker pools on the robot; vision also uses one thread.
     cv2.setNumThreads(1)
     config = yaml.safe_load(Path(args.config).read_text())
+    capture_fps = float(os.environ.get("CAMERA_CAPTURE_FPS", "15"))
+    frame_us = int(os.environ.get("CAMERA_FRAME_US", "66667"))
     binary = Path(os.environ.get('CAMERA_BINARY', config['vision']['camera_binary'])).expanduser()
     if not binary.is_file():
         parser.error(f'Missing Burger1 camera runtime: {binary}')
@@ -75,11 +77,11 @@ def main():
     capture_settings = tempfile.TemporaryDirectory(prefix='burger1-camera-')
     try:
         script = Path(capture_settings.name) / 'capture.yaml'
-        # Limit sensor capture, not just ROS publication. At 2304x1296 each
-        # pipe frame is ~12 MB; unlimited capture wastes CPU/memory bandwidth.
+        # Keep full sensor crop with 1920x1080; smaller streams choose a cropped sensor mode.
+        # libcamera RGB888 is packed BGR in memory (V4L2 BGR24): 6.22 MB/frame.
         script.write_text(yaml.safe_dump({
             'properties': [{'loop': 1}],
-            'frames': [{0: {'FrameDurationLimits': [66667, 66667]}}],
+            'frames': [{0: {'FrameDurationLimits': [frame_us, frame_us]}}],
         }))
         read_fd, write_fd = os.pipe()
         stream = os.fdopen(read_fd, 'rb')
@@ -88,7 +90,7 @@ def main():
         try:
             process = subprocess.Popen([
                 str(binary), '-c', '1', '--capture',
-                '--stream=width=2304,height=1296,pixelformat=XRGB8888',
+                '--stream=width=1920,height=1080,pixelformat=RGB888',
                 '--strict-formats', f'--script={script}',
                 f'--file=/proc/self/fd/{write_fd}'],
                 env=env, pass_fds=(write_fd,), stdout=subprocess.DEVNULL)
@@ -98,16 +100,16 @@ def main():
         finally:
             os.close(write_fd)
         reader = threading.Thread(target=read_frames, args=(
-            stream, frames, lambda: node.get_clock().now().to_msg(), 2304, 1296), daemon=True)
+            stream, frames, lambda: node.get_clock().now().to_msg(), 1920, 1080), daemon=True)
         reader.start()
         def publish_latest():
             try:
                 data, stamp = frames.get_nowait()
             except queue.Empty:
                 return
-            publisher.publish(image_message(data, stamp, config['camera_frame'], 2304, 1296))
-        node.create_timer(1 / 15, publish_latest)
-        node.get_logger().info('Burger1 full-field 2304x1296 -> 640x360, capture limited to 15 fps -> ' + config['vision']['camera_topic'])
+            publisher.publish(image_message(data, stamp, config['camera_frame'], 1920, 1080))
+        node.create_timer(1 / capture_fps, publish_latest)
+        node.get_logger().info(f'Burger1 full-field 1920x1080 -> 640x360, capture {capture_fps:g} fps -> ' + config['vision']['camera_topic'])
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=.1)
             if not reader.is_alive():

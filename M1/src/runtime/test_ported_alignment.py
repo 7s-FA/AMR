@@ -12,6 +12,12 @@ def test_small_near_stage_heading_error_does_not_saturate_turn():
     v, w = c.tick(0.)
     assert c.reason == 'near_stage_heading_alignment'
     assert v == 0.
+    assert 0. < w < .048  # New visual steering starts with a bounded acceleration.
+    for t in (.02, .04):
+        previous = w
+        inputs(c, t, o=observation(x=-.015, z=.25, yaw=-.04))
+        v, w = c.tick(t)
+        assert v == 0. and 0. <= w-previous <= .016+1e-9
     assert math.isclose(w, .048)
 
 

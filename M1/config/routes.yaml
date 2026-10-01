@@ -31,7 +31,6 @@ routes:
   park:
   - way1_park
   rest:
-  - way3_exit
   - way4_rest
 terminal:
   mat: dock

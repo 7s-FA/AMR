@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Run ON burger2 after setup_camera.sh; see docs/DOCKING_VISION.md.
 set -eo pipefail
+# Low-rate standby; terminal controller restores the original 15 fps first.
+CAMERA_PROFILE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/burger2-camera-profile"
+if [[ "$(cat "$CAMERA_PROFILE" 2>/dev/null || echo idle)" == active ]];then
+ export CAMERA_FRAME_US=66667 CAMERA_CAPTURE_FPS=15
+else
+ export CAMERA_FRAME_US=500000 CAMERA_CAPTURE_FPS=2
+fi
 source /opt/ros/jazzy/setup.bash
 CAMERA_ROOT="${CAMERA_ROOT:-$HOME/final_robot_camera}"
 if [[ ! -f "$CAMERA_ROOT/install/camera_ros/share/camera_ros/local_setup.bash" ||

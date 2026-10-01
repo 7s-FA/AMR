@@ -18,7 +18,7 @@ case "$ACTION" in
     [[ "$state" == loaded ]] || continue
     systemctl --user stop "$unit"
   done
-  if [[ "$ACTION" == off ]];then systemctl --user stop "$ROBOT-nav2.service" "$ROBOT-localization.service" "$ROBOT-motion-owner.service" "$ROBOT-nav-control.service" "$ROBOT-camera.service" "$ROBOT-base.service";fi
+  if [[ "$ACTION" == off ]];then systemctl --user stop "$ROBOT-nav2.service" "$ROBOT-localization.service" "$ROBOT-motion-owner.service" "$ROBOT-nav-control.service" "$ROBOT-camera.service" "$ROBOT-docking-ready.service" "$ROBOT-base.service";fi
   exit ;;
  ready|dock|park) ;;
  *) echo '사용법: manage.sh ready|dock|park|dock-stop|stop|off|status';exit 2 ;;
@@ -33,11 +33,16 @@ fi
 # Do not pass the caller's action/waypoint arguments into preparation.
 source "$HERE/warm.sh" ""
 bash "$HERE/ensure_camera.sh"
+if [[ "$ACTION" == ready || "$ACTION" == dock ]];then bash "$HERE/ensure_docking_ready.sh";fi
 if [[ "$ACTION" == ready ]];then
  bash "$HERE/set_mode.sh" prepare
  echo "$ROBOT 준비 완료. 지정 주차장 시작 위치 자동 적용 / 이후 위치 추정 유지.";exit;fi
 
-MODE=normal;[[ "$ACTION" != park ]] || MODE=parking
+MODE=normal
+if [[ "$ACTION" == park ]];then
+ MODE=parking
+ systemctl --user stop "$ROBOT-docking-ready.service" 2>/dev/null || true
+fi
 rm -f -- "$ROOT/data/$ROBOT/terminal_started" "$ROOT/data/$ROBOT/terminal_result.json"
 systemctl --user reset-failed "$ROBOT-docking.service" 2>/dev/null || true
 TOKEN=$(printenv BURGER_MISSION_TOKEN || true)

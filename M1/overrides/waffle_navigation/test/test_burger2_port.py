@@ -36,7 +36,7 @@ def test_numbered_shortcuts_validate_without_motion(selection, count):
     else:
         assert '출차 동작 생략' in result.stdout
     assert '최종 방향 목표 허용오차: 3°' in result.stdout
-    assert '각 좌표까지 Nav2 전진 피드백 주행 → 정지 → 해당 목표 yaw 회전' in result.stdout
+    assert '중간 통로는 위치 확인 후 다음 경로 → 최종 지점만 목표 yaw 정렬' in result.stdout
     assert '5cm 이내 저속 XY/yaw 동시 보정' not in result.stdout
     assert '최종 진입점:' not in result.stdout
     assert '마지막 접근 전환:' not in result.stdout

@@ -256,15 +256,15 @@ controller_server:
       # 차체 횡방향 최소 속도(m/s). 차동구동 Burger는 0 유지.
       min_vel_y: 0.0
       # 차체 X 최대 속도(m/s). 후진 전용은 0; smoother 상한도 함께 확인.
-      max_vel_x: 0.15
+      max_vel_x: 0.12
       # 차체 횡방향 최대 속도(m/s). 차동구동 Burger는 0 유지.
       max_vel_y: 0.0
       # 최대 회전 속력(rad/s). 증가하면 빠르게 회전하며 제동/추종 특성 확인 필요.
-      max_vel_theta: 1.0
+      max_vel_theta: 0.9
       # 평면 이동 속력 하한(m/s). 음의 후진 속도 하한과는 다름.
       min_speed_xy: 0.0
       # 평면 이동 속력 상한(m/s). 전후진 모두 속력의 크기 기준.
-      max_speed_xy: 0.15
+      max_speed_xy: 0.12
       # 회전 속력 하한(rad/s). 높으면 미세 회전에 불리할 수 있음.
       min_speed_theta: 0.0
       # X 가속도 상한(m/s²). 실제 구동계 및 smoother와 맞춤.
@@ -345,38 +345,38 @@ controller_server:
       # 차체 횡방향 최소 속도(m/s). 차동구동 Burger는 0 유지.
       min_vel_y: 0.0
       # 차체 X 최대 속도(m/s). 후진 전용은 0; smoother 상한도 함께 확인.
-      max_vel_x: 0.066
+      max_vel_x: 0.06336
       # 차체 횡방향 최대 속도(m/s). 차동구동 Burger는 0 유지.
       max_vel_y: 0.0
       # 최대 회전 속력(rad/s). 증가하면 빠르게 회전하며 제동/추종 특성 확인 필요.
       # 이동 중 회전은 최대 0.35 rad/s. 목표 주변 큰 원운동 억제.
-      max_vel_theta: 0.462
+      max_vel_theta: 0.49896
       # 평면 이동 속력 하한(m/s). 음의 후진 속도 하한과는 다름.
       min_speed_xy: 0.0
       # 평면 이동 속력 상한(m/s). 전후진 모두 속력의 크기 기준.
-      max_speed_xy: 0.066
+      max_speed_xy: 0.06336
       # 회전 속력 하한(rad/s). 높으면 미세 회전에 불리할 수 있음.
       min_speed_theta: 0.0
       # X 가속도 상한(m/s²). 실제 구동계 및 smoother와 맞춤.
-      acc_lim_x: 0.33
+      acc_lim_x: 0.396
       # Y 가속도 상한(m/s²). 차동구동은 0.
       acc_lim_y: 0.0
       # 각가속도 상한(rad/s²).
-      acc_lim_theta: 1.056
+      acc_lim_theta: 1.2672
       # X 감속도(m/s²), 음수로 설정. 절댓값이 크면 더 급한 감속 허용.
-      decel_lim_x: -0.462
+      decel_lim_x: -0.5544
       # Y 감속도(m/s²). 차동구동은 0.
       decel_lim_y: 0.0
       # 각감속도(rad/s²), 음수로 설정.
-      decel_lim_theta: -1.056
+      decel_lim_theta: -1.2672
       # X 속도 후보 수. 증가하면 탐색량/CPU 증가; 후진 정지 후보 포함 여부 확인.
       vx_samples: 11
       # Y 속도 후보 수. 차동구동은 1이면 충분.
       vy_samples: 1
       # 각속도 후보 수. 증가하면 조향 후보가 세밀해지고 계산량 증가.
-      vtheta_samples: 21
+      vtheta_samples: 31
       # 후보 궤적 예측 시간(s). 길수록 먼 미래 평가, 좁은 공간에서 제약 증가 가능.
-      sim_time: 0.6
+      sim_time: 0.9
       # 궤적 선형 검사 간격(m). 작게 하면 정밀하지만 계산량 증가.
       linear_granularity: 0.01
       # 궤적 각도 검사 간격(rad). 작게 하면 회전 검사량 증가.
@@ -408,7 +408,7 @@ controller_server:
       # 목표 정렬 평가에 쓸 전방 점 거리(m).
       GoalAlign.forward_point_distance: 0.1
       # 경로 방향 정렬 가중치. 높이면 경로 방향을 더 강하게 추종.
-      PathAlign.scale: 12.0
+      PathAlign.scale: 18.0
       # 경로 정렬 평가에 쓸 전방 점 거리(m). 후진 설정에서는 이 critic 제외.
       PathAlign.forward_point_distance: 0.08
       # 경로에서 벗어난 거리의 점수 가중치. 높이면 경로에 더 밀착.
@@ -418,7 +418,7 @@ controller_server:
     # 전진 설정 기준 후진 시험: 음의 X 속도, 뒤쪽 경로 정렬.
     # GoalAlign은 전진 지향 구현이므로 후진에서는 비활성. 21 samples로 정지 후보 포함.
       # 이동 중 회전 비용. 최종 yaw는 별도 Spin에서 정렬.
-      Twirling.scale: 0.6
+      Twirling.scale: 0.2
 
 local_costmap:
   local_costmap:
@@ -703,11 +703,11 @@ behavior_server:
     # 동작의 충돌 예측 시간(s). 길면 더 먼 구간 검사.
     simulate_ahead_time: 2.0
     # Explicit final-yaw stage: bounded pure rotation with collision checks.
-    max_rotational_vel: 0.924
+    max_rotational_vel: 0.74844
     # 동작 서버 최소 회전 속력(rad/s).
-    min_rotational_vel: 0.088
+    min_rotational_vel: 0.0792
     # 동작 서버 각가속도 상한(rad/s²).
-    rotational_acc_lim: 0.33
+    rotational_acc_lim: 0.396
     # true는 TwistStamped 속도 메시지 사용. 연결된 송수신 노드 모두 형식 일치 필요.
     enable_stamped_cmd_vel: true
 waypoint_follower:
@@ -912,14 +912,14 @@ velocity_smoother:
     feedback: OPEN_LOOP
     # 최대 속도 배열 [vx(m/s), vy(m/s), wz(rad/s)]. DWB 상한과 함께 확인.
     max_velocity:
-    - 0.08
+    - 0.0768
     - 0.0
-    - 1.0
+    - 1.08
     # 최소 속도 배열 [vx, vy, wz]. 음수는 후진/반대 회전 허용.
     min_velocity:
-    - -0.08
+    - -0.0768
     - 0.0
-    - -1.0
+    - -1.08
     # 축별 미세 속도를 0 처리하는 크기 [vx,vy,wz].
     deadband_velocity:
     - 0.0
@@ -929,12 +929,12 @@ velocity_smoother:
     velocity_timeout: 1.0
     # 축별 가속도 상한 [x(m/s²),y(m/s²),각(rad/s²)].
     max_accel:
-    - 0.33
+    - 0.396
     - 0.0
-    - 0.33
+    - 0.66
     # 축별 감속도 [x,y,각], 음수 값 사용.
     max_decel:
-    - -0.462
+    - -0.5544
     - 0.0
     - -0.88
     # 오도메트리 입력 토픽.

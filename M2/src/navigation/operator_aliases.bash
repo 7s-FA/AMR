@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Source this file inside the robot SSH shell. No motion runs on loading.
-alias b2_ready='bash /home/ubuntu/final_robot_ws/robot/burger2/navigation/manage.sh ready'
+alias b2_ready='bash /home/ubuntu/final_robot_ws/robot/burger2/navigation/ready_watch.sh'
 alias b2_parked='bash /home/ubuntu/final_robot_ws/robot/burger2/navigation/confirm_parked.sh '
 alias b2_mat='bash /home/ubuntu/final_robot_ws/robot/burger2/navigation/mission.sh mat'
 alias b2_asm='bash /home/ubuntu/final_robot_ws/robot/burger2/navigation/mission.sh asm'

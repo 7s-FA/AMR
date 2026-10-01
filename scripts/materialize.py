@@ -35,9 +35,7 @@ def materialize(robot,output):
     # All paths named host_ws/handoff below are retained only for runtime compatibility.
     env=workspace/'handoff/pc_env.bash'
     env.write_text(f'''# Robot-only ROS environment generated for {robot}.
-source /opt/ros/jazzy/setup.bash
-source "$HOME/turtlebot3_ws/install/local_setup.bash"
-source "{workspace}/host_ws/install/local_setup.bash"
+source "{workspace}/handoff/ros_setup_fast.bash" || return 1
 export BURGER_PROJECT_ROOT="{workspace}" BURGER_NAV2_BASE_DIR="{camera}"
 export ROS_DOMAIN_ID=40 TURTLEBOT3_MODEL=burger LDS_MODEL=LDS-02
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp

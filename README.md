@@ -12,6 +12,8 @@ M1(기존 Burger1), M2(기존 Burger2) **로봇 내부에서 실행하는 코드
 
 ## 로봇 구분과 동작 흐름
 
+2026-10-01 실제 로봇 변경분을 반영했습니다. **일반 도킹은 두 로봇이 같은 공통 코드·설정**을 사용하고 주차·카메라·경로 차이는 프로필에 유지합니다. [이번 변경·검증 기록](docs/robot_sync_2026-10-01.md)
+
 | 구분 | M1 | M2 |
 |---|---|---|
 | 기존 이름 / 내부 ROS namespace | burger1 | burger2 |
@@ -115,20 +117,28 @@ AMR/
 │   │   ├── nav_control_service.sh
 │   │   ├── nav_env.bash
 │   │   ├── operation.py
+│   │   ├── ready_monitor.py
+│   │   ├── ready_watch.sh
 │   │   ├── rest.sh
 │   │   ├── rest_forward.py
 │   │   ├── run_waypoints_record.sh
 │   │   ├── sequence_runner.py
 │   │   ├── start_nav2.sh
 │   │   ├── station_routes.py
-│   │   └── terminal_wrapper.sh
+│   │   ├── terminal_wrapper.sh
+│   │   └── watch_ready.sh
 │   ├── network/
 │   │   ├── nav2_local_transport.py
 │   │   └── nav2_network.bash
 │   ├── runtime/
 │   │   ├── docking_control.py
 │   │   ├── docking_network.py
+│   │   ├── docking_standby.py
+│   │   ├── docking_warm_client.py
 │   │   └── test_docking_recovery.py
+│   ├── runtime_env/
+│   │   ├── ros_setup_cache.py
+│   │   └── ros_setup_fast.bash
 │   └── src/
 │       ├── amr_mission/
 │       │   ├── amr_mission/
@@ -202,6 +212,7 @@ AMR/
 │   ├── commands.md
 │   ├── host_interface.md
 │   ├── known_issues.md
+│   ├── robot_sync_2026-10-01.md
 │   ├── troubleshooting.md
 │   └── validation.md
 ├── F1/
@@ -241,11 +252,14 @@ AMR/
 │   │       ├── launch/
 │   │       │   ├── burger1_navigation.launch.py
 │   │       │   └── burger2_navigation.launch.py
+│   │       ├── scripts/
+│   │       │   └── nav2_waypoints.py
 │   │       └── test/
 │   │           ├── test_arrival_recovery.py
 │   │           ├── test_burger2_port.py
 │   │           ├── test_burger2_velocity_samples.py
 │   │           ├── test_directional_waypoints.py
+│   │           ├── test_large_heading_alignment.py
 │   │           ├── test_position_then_yaw.py
 │   │           └── test_precision_tuning.py
 │   ├── runtime_env/
@@ -254,6 +268,7 @@ AMR/
 │   │   └── pc_env.bash
 │   ├── src/
 │   │   ├── navigation/
+│   │   │   ├── ensure_docking_ready.sh
 │   │   │   ├── launch_localization.sh
 │   │   │   ├── launch_nav2.sh
 │   │   │   ├── launch_owner.sh
@@ -269,6 +284,7 @@ AMR/
 │   │   ├── runtime/
 │   │   │   ├── base.launch.py
 │   │   │   ├── camera_node.py
+│   │   │   ├── camera_profile.sh
 │   │   │   ├── docking_node.py
 │   │   │   ├── docking_recorder.py
 │   │   │   ├── docking_vision_worker.py
@@ -277,6 +293,8 @@ AMR/
 │   │   │   ├── start_base.sh
 │   │   │   ├── start_camera.sh
 │   │   │   ├── start_docking.sh
+│   │   │   ├── start_docking_engine.sh
+│   │   │   ├── start_docking_standby.sh
 │   │   │   ├── start_ir.sh
 │   │   │   ├── start_nav_base.sh
 │   │   │   ├── test_camera_node.py
@@ -309,11 +327,13 @@ AMR/
 │   │   └── pc_env.bash
 │   ├── src/
 │   │   ├── navigation/
+│   │   │   ├── ensure_docking_ready.sh
 │   │   │   ├── launch_localization.sh
 │   │   │   ├── launch_nav2.sh
 │   │   │   ├── launch_owner.sh
 │   │   │   ├── manage.sh
 │   │   │   ├── mission_entry.sh
+│   │   │   ├── motion_trace.py
 │   │   │   ├── operator_aliases.bash
 │   │   │   ├── run_docking_departure_once.sh
 │   │   │   ├── run_rest.sh
@@ -324,6 +344,7 @@ AMR/
 │   │   │   └── warm.sh
 │   │   ├── runtime/
 │   │   │   ├── base.launch.py
+│   │   │   ├── camera_profile.sh
 │   │   │   ├── docking_node.py
 │   │   │   ├── docking_vision_worker.py
 │   │   │   ├── ir_sensor.py
@@ -331,6 +352,8 @@ AMR/
 │   │   │   ├── start_base.sh
 │   │   │   ├── start_camera.sh
 │   │   │   ├── start_docking.sh
+│   │   │   ├── start_docking_engine.sh
+│   │   │   ├── start_docking_standby.sh
 │   │   │   ├── start_ir.sh
 │   │   │   ├── start_nav_base.sh
 │   │   │   ├── test_docking_control.py
@@ -376,7 +399,8 @@ AMR/
 │   ├── test_action_contract.py
 │   ├── test_action_ros.py
 │   ├── test_backend.py
-│   └── test_packaging.py
+│   ├── test_packaging.py
+│   └── test_synced_docking.py
 ├── .gitattributes
 ├── .gitignore
 ├── dependencies.repos
@@ -477,8 +501,8 @@ bash scripts/build.sh "$AMR_RUNTIME"
 amr install-services
 ```
 
-- M1의 카메라 준비는 기존 `~/camera-build/libcamera/build/src/apps/cam/cam` 실행 파일을 확인합니다. 기존 보정에 사용한 런타임이 필요합니다.
-- M2는 새 실행 디렉터리 안에 고정된 버전의 libcamera·camera_ros를 설치·빌드합니다. 카메라 설치 과정에서 sudo 비밀번호를 요청할 수 있습니다.
+- M1·M2 모두 각 실행 디렉터리 안에 고정된 버전의 libcamera·camera_ros를 설치·빌드합니다. 카메라 설치 과정에서 sudo 비밀번호를 요청할 수 있습니다.
+- 2026-10-01 로봇 스냅샷 기준 M1도 M2와 같은 640×480 camera_ros 방식을 사용합니다. 대기 시 2fps, 도킹 시 M1 20fps/M2 15fps로 전환합니다.
 - 생성기는 기존 출력 디렉터리를 덮어쓰지 않습니다. 이미 구성했다면 재실행하지 않고 다음 단계로 진행합니다. 소스 갱신 후에는 새 출력 경로를 사용합니다.
 - 서비스 등록은 다른 내용의 기존 서비스를 덮어쓰지 않습니다. 기존 운용을 중지하고 유닛을 백업·검토한 뒤 전환해야 합니다. 등록만으로 서비스가 자동 시작되거나 로봇이 움직이지 않습니다.
 
@@ -596,13 +620,14 @@ ros2 topic echo "/${ROBOT_ID,,}/mission/diagnostics"
 
 ## 검증과 관련 문서
 
-이관 시 자동 검사 **484개**와 M1·M2 Nav2 패키지 및 Action 인터페이스 빌드가 통과했습니다. 새 Action 연동·속도 제한의 **실제 로봇 통합 주행 검증은 남아 있습니다.** 기존 본체의 `stack smashing detected` / 종료 코드 `-6` 문제도 해결된 것으로 표시하지 않습니다.
+최신 동기화 후 자동 검사 **556개**와 M1·M2의 Nav2·Action 인터페이스·Action 서버 빌드가 통과했습니다. 새 Action 연동·속도 제한의 **실제 로봇 통합 주행 검증은 남아 있습니다.** 기존 본체의 `stack smashing detected` / 종료 코드 `-6` 문제도 해결된 것으로 표시하지 않습니다.
 
 | 문서 | 내용 |
 |---|---|
 | [실행 명령 모음](docs/commands.md) | 설치부터 개별 시험·Action 연동·로그까지 |
 | [호스트 Action 계약](docs/host_interface.md) | 필드, 정지·속도 정책, 호스트 담당자 변경 사항 |
-| [검증 기록](docs/validation.md) | 빌드·자동 검사 결과와 검증 범위 |
+| [최신 로봇 동기화](docs/robot_sync_2026-10-01.md) | 원본 백업·이번 변경·일반 도킹 공통화·556개 검사 |
+| [최초 이관 검증](docs/validation.md) | 빌드·자동 검사 결과와 검증 범위 |
 | [남은 문제](docs/known_issues.md) | 아직 해결 또는 현장 확인이 필요한 이슈 |
 | [트러블슈팅](docs/troubleshooting.md) | 증상별 확인 위치 |
 | [2026-09-30 시험 기록](docs/test_reports/2026-09-30.md) | 이전 실제 주행·도킹 시험 요약 |
@@ -620,7 +645,7 @@ ros2 topic echo "/${ROBOT_ID,,}/mission/diagnostics"
 
 ```bash
 python3 scripts/update_manifest.py
-python3 -m pytest -q tests/test_action_contract.py tests/test_backend.py tests/test_packaging.py
+python3 -m pytest -q tests/test_action_contract.py tests/test_backend.py tests/test_packaging.py tests/test_synced_docking.py
 # host_pkg와 amr_mission 빌드 환경을 source한 테스트 PC에서 실행
 ROS_DOMAIN_ID=232 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
   python3 -m pytest -q tests/test_action_ros.py

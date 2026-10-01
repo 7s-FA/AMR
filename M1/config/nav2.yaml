@@ -146,11 +146,11 @@ controller_server:
       debug_trajectory_details: true
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.15
+      max_vel_x: 0.12
       max_vel_y: 0.0
-      max_vel_theta: 1.0
+      max_vel_theta: 0.9
       min_speed_xy: 0.0
-      max_speed_xy: 0.15
+      max_speed_xy: 0.12
       min_speed_theta: 0.0
       acc_lim_x: 3.0
       acc_lim_y: 0.0
@@ -193,22 +193,22 @@ controller_server:
       debug_trajectory_details: false
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.066
+      max_vel_x: 0.06336
       max_vel_y: 0.0
-      max_vel_theta: 0.462
+      max_vel_theta: 0.648
       min_speed_xy: 0.0
-      max_speed_xy: 0.066
+      max_speed_xy: 0.06336
       min_speed_theta: 0.0
-      acc_lim_x: 0.33
+      acc_lim_x: 0.396
       acc_lim_y: 0.0
-      acc_lim_theta: 1.056
-      decel_lim_x: -0.462
+      acc_lim_theta: 1.584
+      decel_lim_x: -0.5544
       decel_lim_y: 0.0
-      decel_lim_theta: -1.056
+      decel_lim_theta: -1.584
       vx_samples: 11
       vy_samples: 1
-      vtheta_samples: 21
-      sim_time: 0.6
+      vtheta_samples: 31
+      sim_time: 0.9
       linear_granularity: 0.01
       angular_granularity: 0.025
       transform_tolerance: 0.2
@@ -228,11 +228,11 @@ controller_server:
       BaseObstacle.scale: 0.02
       GoalAlign.scale: 0.0
       GoalAlign.forward_point_distance: 0.1
-      PathAlign.scale: 12.0
+      PathAlign.scale: 18.0
       PathAlign.forward_point_distance: 0.08
       PathDist.scale: 24.0
       GoalDist.scale: 32.0
-      Twirling.scale: 0.6
+      Twirling.scale: 0.2
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -394,9 +394,9 @@ behavior_server:
     robot_base_frame: burger1/base_link
     transform_timeout: 0.1
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.924
-    min_rotational_vel: 0.088
-    rotational_acc_lim: 0.33
+    max_rotational_vel: 0.74844
+    min_rotational_vel: 0.0792
+    rotational_acc_lim: 0.396
     enable_stamped_cmd_vel: true
 waypoint_follower:
   ros__parameters:
@@ -510,24 +510,24 @@ velocity_smoother:
     scale_velocities: false
     feedback: OPEN_LOOP
     max_velocity:
-    - 0.08
+    - 0.0768
     - 0.0
-    - 1.0
+    - 1.08
     min_velocity:
-    - -0.08
+    - -0.0768
     - 0.0
-    - -1.0
+    - -1.08
     deadband_velocity:
     - 0.0
     - 0.0
     - 0.0
     velocity_timeout: 1.0
     max_accel:
-    - 0.33
+    - 0.396
     - 0.0
-    - 0.33
+    - 0.66
     max_decel:
-    - -0.462
+    - -0.5544
     - 0.0
     - -0.88
     odom_topic: odom

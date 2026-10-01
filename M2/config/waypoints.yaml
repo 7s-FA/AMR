@@ -12,11 +12,11 @@ arrival_tuning:
   # 최종 방향 허용 오차(rad). 0.25 rad는 약 14.3도입니다.
   yaw_goal_tolerance: 0.25
   # Spin 회전 최대 각속도(rad/s).
-  max_rotational_vel: 0.924
+  max_rotational_vel: 0.74844
   # Spin 회전 최소 각속도(rad/s).
-  min_rotational_vel: 0.088
+  min_rotational_vel: 0.0792
   # Spin 각가속도(rad/s^2).
-  rotational_acc_lim: 0.33
+  rotational_acc_lim: 0.396
 
 # map 좌표계: x/y는 m, yaw는 degree.
 # 정지 상태에서 현재 map → base_footprint TF로 수집한 위치와 앞면 방향.
@@ -26,5 +26,5 @@ arrival_tuning:
 waypoints:
   - {x: 0.45062385, y: 0.036671807, yaw: 90.760873754, mode: forward}
   - {x: 0.45062385, y: 0.360654172, yaw: 90.760873754, mode: forward}
-  - {x: 0.45062385, y: -0.178328193, yaw: 0.0, mode: forward}  # way3: x +30 mm, y -15 mm (2026-09-30)
+  - {x: 0.45062385, y: -0.208328193, yaw: 0.0, mode: forward}  # way3: way4 방향으로 30 mm 이동 (2026-10-01)
   - {x: 0.45062385, y: -0.368328193, yaw: 270.0, mode: forward}  # way4: y -40 mm from previous value (2026-09-30)

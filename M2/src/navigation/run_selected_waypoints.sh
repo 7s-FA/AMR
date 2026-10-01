@@ -44,6 +44,7 @@ if systemctl --user is-active --quiet burger2-rest.service || systemctl --user i
 fi
 # Do not pass the caller's action/waypoint arguments into preparation.
 source "$HERE/warm.sh" ""
+if [[ "$SELECTION" == asm || "$SELECTION" == mat ]];then bash "$HERE/ensure_docking_ready.sh";fi
 bash "$HERE/ensure_camera.sh"
 bash "$HERE/set_mode.sh" nav
 systemctl --user is-active --quiet burger2-nav2.service || {
@@ -86,6 +87,9 @@ if ! kill -0 "$RECORDER_PID" 2>/dev/null; then
   cat "$LOG_DIR/recorder.log" >&2
   exit 1
 fi
+else
+ python3 "$HERE/motion_trace.py" --robot burger2 --output "$LOG_DIR/motion_state.jsonl" >"$LOG_DIR/trace.log" 2>&1 &
+ RECORDER_PID=$!
 fi
 # Claim the one-shot departure only after readiness/recorder checks. Never
 # automatically repeat it after a failed or interrupted departure.

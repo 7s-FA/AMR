@@ -11,12 +11,12 @@
     {
       "source": "M2/src/runtime/docking_vision_worker.py",
       "target": "camera/docking_vision_worker.py",
-      "sha256": "38916c69bc4fbe5dfff883f4c513fbab443d0f909fc3c2537891d188740679e4"
+      "sha256": "dbae4bcf0a3abea966ea41114d5a833b2a10d6ff9110746edd5fccd360a1e6a6"
     },
     {
       "source": "common/runtime/docking_control.py",
       "target": "camera/docking_control.py",
-      "sha256": "27a0dc67bc83aa8a77d3d429bed3874f79a984422b6568d9c8491d18a245a296"
+      "sha256": "965f53936d964b1224d50089578e16f184453d23b450fcecd26de4c5a443c122"
     },
     {
       "source": "common/runtime/docking_network.py",
@@ -61,7 +61,7 @@
     {
       "source": "M2/config/docking.yaml",
       "target": "camera/docking.yaml",
-      "sha256": "8d8f948e9bab70aedda77a2fb79bf0ad1a4df0ef3792527e0b2db7fb7ff9aea7"
+      "sha256": "08a25d2f872c7b23603a0fd01e9e759bdc5e95d7b6f27d80d3929ebd3b66e7d9"
     },
     {
       "source": "M2/src/runtime/ir_sensor.py",
@@ -81,7 +81,7 @@
     {
       "source": "M2/src/runtime/start_camera.sh",
       "target": "camera/start_camera.sh",
-      "sha256": "33aa03351926137f3ec4602d4507a98d82eb2166e0c7c00223709d4b4a6e59bf"
+      "sha256": "b47e55f3cff42a658044a2508709a386d2e1c2cfe7e1e95227417671e3d7cfe2"
     },
     {
       "source": "M2/config/camera.yaml",
@@ -96,7 +96,7 @@
     {
       "source": "M2/src/runtime/start_docking.sh",
       "target": "camera/start_docking.sh",
-      "sha256": "3c60482eb14f3864c91de835f4ae51cd6e72d1c738ae85e5838bcc50c95903f1"
+      "sha256": "7ba4a9942932c2abbdab84f9054534dbbc806bae7a462404bf0795bce969cbec"
     },
     {
       "source": "common/navigation/mission.sh",
@@ -106,7 +106,7 @@
     {
       "source": "M2/src/navigation/run_selected_waypoints.sh",
       "target": "workspace/robot/burger2/navigation/run_selected_waypoints.sh",
-      "sha256": "38b466252d6229e36f3cd35224a9621c757900916ac31b22aa93622dd8fb1a75"
+      "sha256": "5ffdd932765a4414483f6714b945a49e32e081579a4a627ffdf1b41e35184e16"
     },
     {
       "source": "common/navigation/nav_env.bash",
@@ -126,7 +126,7 @@
     {
       "source": "M2/src/navigation/manage.sh",
       "target": "workspace/robot/burger2/navigation/manage.sh",
-      "sha256": "2970435ec02d11c2740dd5687bac29e8ace1374d7b776c057540d968a133433a"
+      "sha256": "c8a933dad20e0cca4c71bdc2d76e37268a5a80fc68d4e516b12940adb5ae8d14"
     },
     {
       "source": "M2/src/navigation/warm.sh",
@@ -136,7 +136,7 @@
     {
       "source": "common/navigation/check_ready.py",
       "target": "workspace/robot/burger2/navigation/check_ready.py",
-      "sha256": "f91fc8f0118ab6712457fbc1bac36903c4426c30124c23049458322224ed6a13"
+      "sha256": "c730ada446624fb63bc3bdfa26362ff78fdf102080a02e97f54a5194688d5877"
     },
     {
       "source": "common/navigation/motion_owner.py",
@@ -191,7 +191,7 @@
     {
       "source": "M2/config/routes.yaml",
       "target": "workspace/robot/burger2/navigation/station_routes.yaml",
-      "sha256": "ed683b5deb0846b000e8ae2b608c4649b3a175e7315ffdc0fa7792a66fed0720"
+      "sha256": "0f0541ae7cc0fbcc6d75743ad3d4f3bba6a087dc0c92e72310b3b25bc2f3cd9d"
     },
     {
       "source": "M2/src/navigation/save_start_pose.sh",
@@ -211,7 +211,7 @@
     {
       "source": "M2/src/navigation/operator_aliases.bash",
       "target": "workspace/robot/burger2/navigation/operator_aliases.bash",
-      "sha256": "1d01b535c06ec2d7efbbc629c3c9ff44b243c6953c2f75e9e3b1dfa262a481d8"
+      "sha256": "1d85b38cd98f47f0a469100466fdef8eba4bfc0f608e110a10aef8c632c79e39"
     },
     {
       "source": "common/navigation/operation.py",
@@ -241,7 +241,7 @@
     {
       "source": "M2/src/navigation/run_waypoints.sh",
       "target": "workspace/robot/burger2/navigation/run_waypoints.sh",
-      "sha256": "aef04e0ce12f9b0a9f1db8aa0c3e667d2a02f03fe262f9b989aa96134b0764a3"
+      "sha256": "8cf996fc9729d877a81839a3eacb43a58807c24df419dbff7543fddbcf24ac17"
     },
     {
       "source": "M2/src/navigation/launch_owner.sh",
@@ -361,12 +361,12 @@
     {
       "source": "M1/config/waypoints.yaml",
       "target": "workspace/host_ws/src/waffle_navigation/config/waypoints_burger1.yaml",
-      "sha256": "4b586551ae5b353fa950fb035b62593a0a09f237f23cb8edf284e11c51138fa6"
+      "sha256": "5be65a68e7349d0d871b1620a8eae6ac8e83b1fed2ecb6e66237a5d856403cc6"
     },
     {
       "source": "M2/config/nav2.yaml",
       "target": "workspace/host_ws/src/waffle_navigation/config/nav2_burger2_params.yaml",
-      "sha256": "e6e5f83557d0a4022bc918a81c8a009fc9010aebfd9d02c98c452bcf7988935f"
+      "sha256": "0d5691a737d8ef43207c2b57396420c765b658ebd7907f23fa08cf5d6ec51662"
     },
     {
       "source": "common/src/waffle_navigation/config/nav2_params.yaml",
@@ -376,12 +376,12 @@
     {
       "source": "M2/config/waypoints.yaml",
       "target": "workspace/host_ws/src/waffle_navigation/config/waypoints_burger2.yaml",
-      "sha256": "2591dc0ccf8eafbbe3acdfcab58b47833fb92dbbe55a6f07af1c6430ad343668"
+      "sha256": "6a7069bb08bac41e74cc0c512787f1a3fc48dfa87195db41a7c7e36335b4eda2"
     },
     {
       "source": "M1/config/nav2.yaml",
       "target": "workspace/host_ws/src/waffle_navigation/config/nav2_burger1_params.yaml",
-      "sha256": "d054f5b429ec817b0017a0042d5373c72732c9516494a3ab6af85cf827338277"
+      "sha256": "0c5f5dd15e04a3150ccf7c44d01fd2d02c1721a4bc50c6929719385c40053929"
     },
     {
       "source": "common/src/waffle_navigation/config/mapper_params.yaml",
@@ -416,7 +416,7 @@
     {
       "source": "common/src/waffle_navigation/test/test_large_heading_alignment.py",
       "target": "workspace/host_ws/src/waffle_navigation/test/test_large_heading_alignment.py",
-      "sha256": "8625dc4301263815b3e3d857630b671b05168d0ec5dce13d2c657643bf0ef741"
+      "sha256": "76da3eca20e7b431013b23da97902f2d72ebe287a467efa02c3941be48b75342"
     },
     {
       "source": "common/src/waffle_navigation/test/test_way12_continuous.py",
@@ -491,7 +491,7 @@
     {
       "source": "common/src/waffle_navigation/test/test_burger2_velocity_samples.py",
       "target": "workspace/host_ws/src/waffle_navigation/test/test_burger2_velocity_samples.py",
-      "sha256": "91f276033dcd8e7c9c66cf1ba696b99a87d9065196d853f5395277280f1fd2ae"
+      "sha256": "799c2e26e1de40d7292fa12ddbd77c9180272892e1dd08683dd79024acb642bc"
     },
     {
       "source": "common/src/waffle_navigation/launch/map_view.launch.py",
@@ -531,7 +531,7 @@
     {
       "source": "common/src/waffle_navigation/scripts/nav2_waypoints.py",
       "target": "workspace/host_ws/src/waffle_navigation/scripts/nav2_waypoints.py",
-      "sha256": "f63281def435891291d9fd05754dc6d78947cc04c4b34dcd7acf72c95c830ec3"
+      "sha256": "b59eeefa66c9077e4838f65a87c563df58acf394d06a9bce354e96eea1516ede"
     },
     {
       "source": "M2/map/factory_map.yaml",
@@ -592,6 +592,66 @@
       "source": "systemd/M2/burger2-localization.service",
       "target": "units/burger2-localization.service",
       "sha256": "eb0ebd617295e73b95a5eef3de08a01ea0265301c1c174534974efef0d80b95c"
+    },
+    {
+      "source": "M2/src/runtime/camera_profile.sh",
+      "target": "camera/camera_profile.sh",
+      "sha256": "9f4ad69cb603854722438e9b3f5b4e70b27fb49f7a6bed6d021d68e39fd0071e"
+    },
+    {
+      "source": "common/runtime/docking_standby.py",
+      "target": "camera/docking_standby.py",
+      "sha256": "24176dbe8be96358f2537356d74c40377a2acb992070b9c6206752ee50bab479"
+    },
+    {
+      "source": "common/runtime/docking_warm_client.py",
+      "target": "camera/docking_warm_client.py",
+      "sha256": "f3c7eb4a3ed647ffdb83378083a90515e1fafd23125139ec335706655287f382"
+    },
+    {
+      "source": "common/runtime_env/ros_setup_cache.py",
+      "target": "workspace/handoff/ros_setup_cache.py",
+      "sha256": "466610e763b1a2a827e06a8d735c452221741100040f0f73cff8e4f79c2495a7"
+    },
+    {
+      "source": "common/runtime_env/ros_setup_fast.bash",
+      "target": "workspace/handoff/ros_setup_fast.bash",
+      "sha256": "a1df4a69409ed15c23021b71d896ee591d246693144bf41eeb6fb74dcccd28a0"
+    },
+    {
+      "source": "M2/src/navigation/ensure_docking_ready.sh",
+      "target": "workspace/robot/burger2/navigation/ensure_docking_ready.sh",
+      "sha256": "53503bed4f8e836638ec295214be457115a3a383a67a3a3a29b480ce8ecab5ce"
+    },
+    {
+      "source": "M2/src/navigation/motion_trace.py",
+      "target": "workspace/robot/burger2/navigation/motion_trace.py",
+      "sha256": "7f8b896a56a5e38e1ee37bee9556989bff65fb04150b195ef8b074839bd71a65"
+    },
+    {
+      "source": "common/navigation/ready_monitor.py",
+      "target": "workspace/robot/burger2/navigation/ready_monitor.py",
+      "sha256": "65969254719d11b0962e8f422fb2ef09bb8071de9882b85c21027b9abe045c8e"
+    },
+    {
+      "source": "common/navigation/ready_watch.sh",
+      "target": "workspace/robot/burger2/navigation/ready_watch.sh",
+      "sha256": "99c8c35190d13585ed6a2b2386f2e17fb01576c52327096144ee1fbc786506f8"
+    },
+    {
+      "source": "common/navigation/watch_ready.sh",
+      "target": "workspace/robot/burger2/navigation/watch_ready.sh",
+      "sha256": "af018974187a445c2875174c3c57ed42e42d88ef7ea453c31d190ee50372b1c4"
+    },
+    {
+      "source": "M2/src/runtime/start_docking_engine.sh",
+      "target": "camera/start_docking_engine.sh",
+      "sha256": "5b86f3df364ea0ec7078d821943fbf66c53b027f0302cebd2d265f6c3c521f89"
+    },
+    {
+      "source": "M2/src/runtime/start_docking_standby.sh",
+      "target": "camera/start_docking_standby.sh",
+      "sha256": "287b2e18beb9af1dd1f8f56209b1f8237acf31b48dd17157d9d70166e76cd6b0"
     }
   ]
 }

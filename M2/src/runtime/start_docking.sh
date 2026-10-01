@@ -1,21 +1,8 @@
 #!/usr/bin/env bash
 set -eo pipefail
-# Bound library thread pools before importing NumPy/OpenCV in spawned workers.
-export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-source /opt/ros/jazzy/setup.bash
-source "$HOME/turtlebot3_ws/install/setup.bash"
-export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-40}"
-/usr/bin/python3 "$SCRIPT_DIR/docking_network.py" --config "$SCRIPT_DIR/docking.yaml" \
-  --role robot --local-shm --output "$SCRIPT_DIR/dds_robot.xml"
-export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-export FASTRTPS_DEFAULT_PROFILES_FILE="$SCRIPT_DIR/dds_robot.xml"
-export RMW_FASTRTPS_PUBLICATION_MODE=ASYNCHRONOUS
-# Support the project checkout as well as the flat deployment directory.
-PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
-DATA_ARGS=()
-if [[ -d "$PROJECT_ROOT/host_ws/src/docking_vision/docking_vision" ]]; then
-  export PYTHONPATH="$PROJECT_ROOT/host_ws/src/docking_vision:${PYTHONPATH:-}"
-  DATA_ARGS=(--calibration "$PROJECT_ROOT/data/burger2/calibration/camera.yaml")
-fi
-exec /usr/bin/python3 "$SCRIPT_DIR/docking_node.py" --config "$SCRIPT_DIR/docking.yaml" "${DATA_ARGS[@]}" "$@"
+HERE=$(cd "$(dirname "$0")" && pwd)
+# Readiness/rate change only. The engine still owns all control/safety checks.
+bash "$HERE/camera_profile.sh" active
+cleanup_camera() { status=$?;trap - EXIT;bash "$HERE/camera_profile.sh" idle || true;exit "$status"; }
+trap cleanup_camera EXIT
+bash "$HERE/start_docking_engine.sh" "$@"

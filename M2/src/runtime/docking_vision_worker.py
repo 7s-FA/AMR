@@ -59,7 +59,7 @@ def run_preview(config, frames, stop):
             rclpy.shutdown()
 
 
-def run_vision(config, channel, frames, stop, progress=None):
+def run_vision(config, channel, frames, stop, progress=None, active=None):
     import cv2
     from docking_vision.board import BoardDetector, DockingBoard
     from docking_vision.vision import load_calibration
@@ -71,7 +71,7 @@ def run_vision(config, channel, frames, stop, progress=None):
         detector = BoardDetector(DockingBoard.load(config['board_path']),
                                  load_calibration(config['calibration_path']))
         source = RosSource(config['vision']['camera_topic'])
-        sequence, last_preview = 0, float('-inf')
+        sequence, last_preview, last_detection = 0, float('-inf'), float('-inf')
         while not stop.is_set():
             try:
                 frame, metadata = source.read(.2)
@@ -79,6 +79,10 @@ def run_vision(config, channel, frames, stop, progress=None):
                 # Controller's local freshness watchdog stops on missing camera data.
                 continue
             started = time.monotonic()
+            full_rate = active is None or active.is_set()
+            if not full_rate and started-last_detection < .5:
+                continue
+            last_detection = started
             if progress is not None:
                 progress[0] = started
             observation, annotated = detector.detect(frame)
@@ -90,7 +94,7 @@ def run_vision(config, channel, frames, stop, progress=None):
             # Deliver control data BEFORE optional display work. No ROS observation input.
             put_latest(channel, observation)
             now = time.monotonic()
-            if now-last_preview >= 1/config['vision']['preview_fps']:
+            if now-last_preview >= 1/(config['vision']['preview_fps'] if full_rate else 1.0):
                 last_preview = now
                 # Viewer/network failure cannot block detector or GPIO process.
                 put_preview(frames, (annotated, metadata))
@@ -108,17 +112,22 @@ class LocalVision:
         self.channel = ctx.Queue(maxsize=1)
         self.frames = ctx.Queue(maxsize=1)
         self.stop = ctx.Event()
+        self.active = ctx.Event()
+        self.active.set()
         # Best-effort telemetry must not block control if the worker is killed.
         self.progress = ctx.Array('d', [0., 0.], lock=False)
-        self.process = ctx.Process(target=run_vision, args=(config, self.channel, self.frames, self.stop, self.progress), daemon=True)
+        self.process = ctx.Process(target=run_vision, args=(config, self.channel, self.frames, self.stop, self.progress, self.active), daemon=True)
         self.preview = ctx.Process(target=run_preview, args=(config, self.frames, self.stop), daemon=True)
         self.process.start()
         self.preview.start()
 
+    def set_active(self, active):
+        self.active.set() if active else self.active.clear()
+
     def health(self):
         now = time.monotonic()
         received, detected = self.progress[:]
-        return {'detector_alive': self.process.is_alive(), 'preview_alive': self.preview.is_alive(),
+        return {'full_rate': self.active.is_set(), 'detector_alive': self.process.is_alive(), 'preview_alive': self.preview.is_alive(),
                 'last_raw_read_age_s': now-received if received else None,
                 'last_detection_age_s': now-detected if detected else None}
 

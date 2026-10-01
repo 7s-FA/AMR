@@ -24,6 +24,12 @@ class Settings:
     final_speed_mps: float = 0.03
     max_angular_rps: float = 0.25
     min_angular_rps: float = 0.03
+    near_angular_rps: float = 0.16
+    steering_accel_rps2: float = 0.8
+    far_steering_gain: float = 1.25
+    angular_speed_scale: float = 1.0
+    inverse_yaw_speed: bool = False
+    board_normal_tracking: bool = False
     observation_timeout_s: float = 0.5
     vision_recovery_timeout_s: float = 2.0
     vision_recovery_hold_s: float = 0.3
@@ -42,6 +48,10 @@ class Settings:
     def __post_init__(self):
         for f in fields(self):
             x = getattr(self, f.name)
+            if f.name in ('inverse_yaw_speed', 'board_normal_tracking'):
+                if type(x) is not bool:
+                    raise ValueError(f'{f.name} must be Boolean')
+                continue
             if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
                 raise ValueError(f'{f.name} must be finite')
             if not f.name.startswith('camera_') and x <= 0:
@@ -74,6 +84,7 @@ class DockingControl:
         self.vision_recoveries = 0
         self.vision_wait_at = self.vision_good_since = self.recovery_stamp = None
         self.recovery_frames = 0
+        self.last_steering_time = None
 
     def halt(self, reason, fault=True):
         self.state = 'FAULT' if fault else 'STOPPED'
@@ -186,9 +197,70 @@ class DockingControl:
         return math.copysign(max(self.cfg.min_angular_rps,
                                  min(abs(value), self.cfg.max_angular_rps)), value)
 
+    def yaw_speed_limit(self, theta):
+        # Larger board-normal yaw errors get a lower speed ceiling.
+        # 15 degrees halves the ceiling; preserve the motor's minimum command.
+        c = self.cfg
+        return max(c.min_angular_rps,
+                   c.max_angular_rps/(1.+abs(theta)/math.radians(15.)))
+
     def tick(self, now):
-        self.last_command = self._tick(now)
-        return self.last_command
+        previous = self.last_command
+        command = self._tick(now)
+        limit = None
+        if self.cfg.inverse_yaw_speed and self.state == 'ALIGN':
+            p = self.pose()
+            if p is not None:
+                limit = self.yaw_speed_limit(p[2]) * self.cfg.angular_speed_scale
+        # Scale visual steering only; stop and straight approach remain immediate.
+        command = (command[0], command[1] * self.cfg.angular_speed_scale)
+        if limit is not None:
+            command = (command[0], clamp(command[1], limit))
+        # Stop commands and the latched straight segment are immediate.
+        # Slew only valid visual steering, never extrapolate a lost pose.
+        if self.state == 'ALIGN' and command != (0.0, 0.0):
+            dt = .02 if self.last_steering_time is None else max(.001, min(.1, now-self.last_steering_time))
+            step = self.cfg.steering_accel_rps2 * self.cfg.angular_speed_scale * dt
+            command = (command[0], previous[1]+clamp(command[1]-previous[1],step))
+        # A newly larger yaw error lowers the ceiling immediately, even when
+        # the previous command was faster. Acceleration still uses the old slew.
+        if limit is not None:
+            command = (command[0], clamp(command[1], limit))
+        self.last_steering_time = now
+        self.last_command = command
+        return command
+
+    def track_board_normal(self, bx, by, theta, optical_z):
+        """Follow the board-normal line with bounded heading, not a shrinking point."""
+        c = self.cfg
+        # Signed distance to the board-normal line is invariant under an in-place
+        # turn. Camera-center offset alone is not: it can cross zero mid-turn.
+        cross_track = by*math.cos(theta)-bx*math.sin(theta)
+        limit = c.near_angular_rps
+        if abs(cross_track) <= .8*c.lateral_tolerance_m:
+            self.reason = 'board_normal_heading_alignment'
+            return 0.0, clamp(self.turn(1.2*theta, settling=True), limit)
+        # Leave visual clearance. A differential drive cannot remove a lateral
+        # offset by rotating in place; do not continue forward beyond this margin.
+        clearance = optical_z-(c.min_visual_distance_m+.04)
+        if clearance <= .003:
+            self.halt('insufficient_visual_alignment_space')
+            return 0.0, 0.0
+        lookahead = max(.04, min(.12, clearance))
+        heading_offset = clamp(math.atan2(cross_track, lookahead), math.radians(15))
+        # Fresh local odometry anticipates a fraction of the observed turn lag.
+        # This is damping only: an invalid visual pose never reaches this method.
+        predicted_theta = theta-self.odom[4]*.15
+        heading_error = wrap(predicted_theta+heading_offset)
+        angular = clamp(self.turn(1.5*heading_error, settling=True), limit)
+        linear = min(c.align_speed_mps, .35*clearance)
+        self.reason = 'board_normal_tracking'
+        if abs(theta) >= math.radians(18) or abs(heading_error) >= math.radians(8):
+            linear = 0.0
+            self.reason = 'board_normal_turn_before_forward'
+        else:
+            linear = max(.01, linear*math.cos(heading_error))
+        return linear, angular
 
     def _tick(self, now):
         zero = (0.0, 0.0)
@@ -283,6 +355,8 @@ class DockingControl:
         self.reason = 'visual_alignment'
         if aligned:
             return c.align_speed_mps, 0.0
+        if c.board_normal_tracking:
+            return self.track_board_normal(bx, by, theta, optical_z)
         # Forward-only polar pose controller to a point on the board normal.
         gx, gy = bx-stage*math.cos(theta), by-stage*math.sin(theta)
         rho = math.hypot(gx, gy)
@@ -292,7 +366,7 @@ class DockingControl:
         cross_track = by*math.cos(theta)-bx*math.sin(theta)
         if rho < .02 and abs(cross_track) <= c.lateral_tolerance_m:
             self.reason = 'near_stage_heading_alignment'
-            return 0.0, self.turn(1.2*theta, settling=True)
+            return 0.0, clamp(self.turn(1.2*theta, settling=True), c.near_angular_rps)
         # A forward-only robot cannot chase a staging point beside/behind it.
         # Move the virtual target forward along the board normal, while reserving
         # visual clearance. This is still closed-loop ArUco alignment, never blind.
@@ -305,10 +379,13 @@ class DockingControl:
             rho = math.hypot(gx, gy)
             self.reason = 'near_stage_forward_alignment'
         if rho < .004:
-            return 0.0, self.turn(1.2*theta, settling=True)
+            return 0.0, clamp(self.turn(1.2*theta, settling=True), c.near_angular_rps)
         alpha = math.atan2(gy, gx)
         beta = wrap(theta-alpha)
-        angular = self.turn(1.8*alpha-.7*beta)
+        blend = max(0., min(1., (optical_z-c.staging_distance_m)/.25))
+        limit = min(c.max_angular_rps, c.near_angular_rps + blend*(c.max_angular_rps-c.near_angular_rps))
+        # Boost the well-conditioned far-field turn, taper near the staging pose.
+        angular = clamp(self.turn((1.+(c.far_steering_gain-1.)*blend)*(1.8*alpha-.7*beta)),limit)
         linear = min(c.align_speed_mps, .4*rho)
         heading_limit = 15 if self.reason == 'near_stage_forward_alignment' else 50
         if abs(alpha) > math.radians(heading_limit):

@@ -13,7 +13,7 @@ trap cleanup EXIT
 python3 "$HERE/station_routes.py" "$ROOT/host_ws/src/waffle_navigation/config/waypoints_burger1.yaml" "$HERE/station_routes.yaml" "$SELECTION" "$TEMP"
 DEPARTURE_FLAG="$ROOT/data/burger1/departure_pending"
 WAYPOINT_ARGS=(--waypoints "$TEMP" --pre-backup-distance 0 --pre-turn-angle-deg 0 --final-yaw-tolerance-deg 3
-      --final-post-turn-xy-tolerance 0.04 --position-arrival-retries 1 --align-large-heading-before-navigation)
+      --final-post-turn-xy-tolerance 0.04 --position-arrival-retries 1 --align-large-heading-before-navigation --prealign-heading-deg 100 --skip-intermediate-yaw)
 add_departure_args() {
   if [[ -f "$DEPARTURE_FLAG" ]]; then
     DEPARTURE_SPEED=$(PYTHONPATH="$HERE" python3 - "$ROOT/data/$ROBOT/action_gate.json" <<'SPEED'
@@ -44,6 +44,7 @@ if systemctl --user is-active --quiet burger1-rest.service || systemctl --user i
 fi
 # Do not pass the caller's action/waypoint arguments into preparation.
 source "$HERE/warm.sh" ""
+if [[ "$SELECTION" == asm || "$SELECTION" == mat ]];then bash "$HERE/ensure_docking_ready.sh";fi
 bash "$HERE/ensure_camera.sh"
 bash "$HERE/set_mode.sh" nav
 systemctl --user is-active --quiet burger1-nav2.service || {

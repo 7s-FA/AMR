@@ -25,9 +25,17 @@ def test_calibrated_robot_differences_are_preserved(robot,ids,park):
     cfg=yaml.safe_load((ROOT/robot/'config/routes.yaml').read_text());assert cfg['parking_marker_ids']==ids;assert cfg['routes']['park']==park
     camera=yaml.safe_load((ROOT/robot/'config/camera.yaml').read_text());assert camera
 
-def test_shared_controller_has_one_source():
-    for robot in ['M1','M2']:
-        m=json.loads((ROOT/robot/'runtime_manifest.json').read_text());e=next(e for e in m['files'] if e['target']=='camera/docking_control.py');assert e['source']=='common/runtime/docking_control.py'
+def test_general_docking_uses_one_controller_and_equal_settings():
+    controls=[]
+    for robot in ('M1','M2'):
+        m=json.loads((ROOT/robot/'runtime_manifest.json').read_text())
+        e=next(e for e in m['files'] if e['target']=='camera/docking_control.py')
+        assert e['source']=='common/runtime/docking_control.py'
+        cfg=yaml.safe_load((ROOT/robot/'config/docking.yaml').read_text())
+        assert cfg['control']['board_normal_tracking'] is True
+        assert cfg['parking_control']['board_normal_tracking'] is False
+        controls.append(cfg['control'])
+    assert controls[0]==controls[1]
 
 def test_no_generated_or_backup_content_in_manifest():
     for robot in ['M1','M2']:

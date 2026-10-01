@@ -1202,7 +1202,7 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
                         return 1
                     distance, heading = travel_heading_error(
                         waypoint, nav.current_map_pose(timeout=min(2.0, remaining)))
-                    if distance > nav.xy_tolerance and abs(heading) > math.radians(35):
+                    if distance > nav.xy_tolerance and abs(heading) > math.radians(getattr(nav,"prealign_heading_deg",45.0)):
                         if not nav.wait_until_stopped(timeout=min(5.0, remaining)):
                             nav.error('구간 시작 방향 정렬 전 정지를 확인하지 못했습니다.')
                             return 1
@@ -1219,7 +1219,8 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
                 if not wait_for_task(nav, deadline, index, waypoint=waypoint, planned_route=True):
                     return 1
                 if finish_waypoint(nav, waypoint, deadline, index,
-                                   is_final=index == len(waypoints), require_yaw=True):
+                                   is_final=index == len(waypoints),
+                                   require_yaw=(index == len(waypoints) or not getattr(nav,"skip_intermediate_yaw",False))):
                     break
                 if (attempt >= retries or
                         not getattr(nav, 'position_retry_before_yaw', False)):
@@ -1311,8 +1312,11 @@ def main():
                         help='출차 후 Nav2 Spin 제자리 회전 각도(도), 기본 0')
     parser.add_argument('--final-post-turn-xy-tolerance', type=float,
                         help='최종 지점 회전 완료 후 위치 허용반경(m); 이동·회전 전 기준은 유지')
+    parser.add_argument('--prealign-heading-deg',type=float,default=45.0)
+    parser.add_argument('--skip-intermediate-yaw',action='store_true',
+                        help='중간 지점 방향 정렬을 생략하고 최종 지점 방향은 유지')
     parser.add_argument('--align-large-heading-before-navigation', action='store_true',
-                        help='다음 좌표 진행 방향 차이가 35도 초과이면 정지 회전 후 전진')
+                        help='설정한 큰 방향 차이에서만 구간 시작 전 제자리 회전')
     parser.add_argument('--position-arrival-retries', type=int, choices=(0, 1), default=0,
                         help='좌표 도착 후 정지 오차 8cm 이내일 때 회전 전 Nav2 재접근 횟수 (0 또는 1)')
     parser.add_argument('--final-yaw-tolerance-deg', type=float,
@@ -1329,6 +1333,8 @@ def main():
     parser.add_argument('--final-staging-distance', type=float, default=0.0,
                         help='최종 방향을 먼저 맞출 진입점 거리(m), 0이면 기존 접근; 전진 전용')
     args = parser.parse_args(remove_ros_args()[1:])
+    if not math.isfinite(args.prealign_heading_deg) or not 45 <= args.prealign_heading_deg <= 120:
+        parser.error("prealign-heading-deg must be between 45 and 120")
     if args.final_post_turn_xy_tolerance is not None and (
             not args.nav2_position_then_yaw or
             not math.isfinite(args.final_post_turn_xy_tolerance) or
@@ -1387,7 +1393,12 @@ def main():
     if args.nav2_precision_pose:
         print('주행 순서: 각 좌표까지 Nav2 전진 피드백 주행 → 5cm 이내 저속 XY/yaw 동시 보정', flush=True)
     elif args.nav2_position_then_yaw:
-        print('주행 순서: 각 좌표까지 Nav2 전진 피드백 주행 → 정지 → 해당 목표 yaw 회전', flush=True)
+        if args.skip_intermediate_yaw:
+            print('주행 순서: 중간 통로는 위치 확인 후 다음 경로 → 최종 지점만 목표 yaw 정렬',flush=True)
+        else:
+            print('주행 순서: 각 좌표까지 Nav2 전진 피드백 주행 → 정지 → 해당 목표 yaw 회전',flush=True)
+        if args.align_large_heading_before_navigation:
+            print(f'구간 시작 제자리 회전: 방향 차이 {args.prealign_heading_deg:g}도 초과에서만',flush=True)
     elif args.final_staging_distance:
         last = waypoints[-1]
         angle = math.radians(last['yaw'])
@@ -1408,6 +1419,8 @@ def main():
     nav = WaypointNavigator(namespace=args.namespace)
     nav.final_yaw_tolerance = (math.radians(args.final_yaw_tolerance_deg)
                                if args.final_yaw_tolerance_deg is not None else None)
+    nav.prealign_heading_deg = args.prealign_heading_deg
+    nav.skip_intermediate_yaw = args.skip_intermediate_yaw
     nav.align_large_heading_before_navigation = args.align_large_heading_before_navigation
     nav.position_arrival_retries = args.position_arrival_retries
     nav.final_post_turn_xy_tolerance = args.final_post_turn_xy_tolerance
