@@ -33,7 +33,7 @@ fi
 # Do not pass the caller's action/waypoint arguments into preparation.
 source "$HERE/warm.sh" ""
 bash "$HERE/ensure_camera.sh"
-if [[ "$ACTION" == ready || "$ACTION" == dock ]];then bash "$HERE/ensure_docking_ready.sh";fi
+if [[ "$ACTION" == ready || "$ACTION" == dock || "$ACTION" == park ]];then bash "$HERE/ensure_docking_ready.sh";fi
 if [[ "$ACTION" == ready ]];then
  bash "$HERE/set_mode.sh" prepare
  echo "$ROBOT 준비 완료. 지정 주차장 시작 위치 자동 적용 / 이후 위치 추정 유지.";exit;fi
@@ -41,7 +41,6 @@ if [[ "$ACTION" == ready ]];then
 MODE=normal
 if [[ "$ACTION" == park ]];then
  MODE=parking
- systemctl --user stop "$ROBOT-docking-ready.service" 2>/dev/null || true
 fi
 rm -f -- "$ROOT/data/$ROBOT/terminal_started" "$ROOT/data/$ROBOT/terminal_result.json"
 systemctl --user reset-failed "$ROBOT-docking.service" 2>/dev/null || true

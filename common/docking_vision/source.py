@@ -71,7 +71,10 @@ class RosSource:
         self.last_stamp = None
         # Let the CLI's KeyboardInterrupt/finally run before closing the ROS context.
         rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
-        self.node = rclpy.create_node('docking_camera_tools')
+        namespace = '/'+topic.strip('/').split('/')[0]
+        if namespace not in ('/burger1', '/burger2'):
+            namespace = '/'
+        self.node = rclpy.create_node('docking_camera_tools', namespace=namespace)
         latest_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT,
                                 durability=DurabilityPolicy.VOLATILE)
         self.subscription = self.node.create_subscription(

@@ -14,7 +14,7 @@ M1(기존 Burger1), M2(기존 Burger2) **로봇 내부에서 실행하는 코드
 
 ## 로봇 구분과 동작 흐름
 
-2026-10-01 실제 로봇 변경분을 반영했습니다. **일반 도킹은 두 로봇이 같은 공통 코드·설정**을 사용하고 주차·카메라·경로 차이는 프로필에 유지합니다. [동기화 기록](docs/robot_sync_2026-10-01.md) · [최신 네임스페이스·정지 판정 수정](docs/namespace_terminal_update_2026-10-01.md)
+2026-10-01 실제 로봇 변경분을 반영했습니다. **일반 도킹은 두 로봇이 같은 공통 코드·설정**을 사용하고 주차·카메라·경로 차이는 프로필에 유지합니다. [동기화 기록](docs/robot_sync_2026-10-01.md) · [네임스페이스·정지 판정 수정](docs/namespace_terminal_update_2026-10-01.md) · [최신 통신 변경분·호스트 연동](docs/communication_sync_2026-10-01.md)
 
 | 구분 | M1 | M2 |
 |---|---|---|
@@ -274,6 +274,7 @@ AMR/
 │   │   ├── nav2_local_transport.py
 │   │   └── nav2_network.bash
 │   ├── runtime/
+│   │   ├── communication_guard.py
 │   │   ├── docking_control.py
 │   │   ├── docking_network.py
 │   │   ├── docking_standby.py
@@ -350,9 +351,13 @@ AMR/
 ├── docs/
 │   ├── images/
 │   │   └── burger-action-spec.png
+│   ├── reference_host/
+│   │   ├── 2026-10-01.md
+│   │   └── source_manifest.json
 │   ├── test_reports/
 │   │   └── 2026-09-30.md
 │   ├── commands.md
+│   ├── communication_sync_2026-10-01.md
 │   ├── host_interface.md
 │   ├── known_issues.md
 │   ├── namespace_terminal_update_2026-10-01.md
@@ -397,7 +402,9 @@ AMR/
 │   ├── test_action_contract.py
 │   ├── test_action_ros.py
 │   ├── test_backend.py
+│   ├── test_communication_sync.py
 │   ├── test_packaging.py
+│   ├── test_reference_host_ros.py
 │   ├── test_rest_and_routes.py
 │   └── test_synced_docking.py
 ├── tools/
@@ -465,7 +472,7 @@ AMR/
 
 Action 요청 접수와 목적지 도착은 다릅니다. 호스트는 **최종 Result 성공**을 받은 뒤 다음 공정으로 넘어가야 합니다. 실패·취소 후 정지 래치는 `RESTART`로 해제하며, 원인과 goal ID는 진단 토픽·작업 JSON에 기록됩니다.
 
-호스트 담당자는 동일한 `host_pkg`를 빌드하고 `/M1/data`, `/M2/data`를 사용해야 합니다. 기존 예제의 `move_to_warehouse`는 `GO_TO_MAT`로 바꾸고, speed 값도 백분율로 전달합니다. [호스트 담당자 변경 사항](docs/host_interface.md#host_pc-담당자에게-필요한-변경)
+호스트 담당자는 동일한 `host_pkg`를 빌드하고 `/M1/data`, `/M2/data`를 사용해야 합니다. 지정된 `Desktop/final_251001` 호스트는 주소·타입이 이미 일치합니다. 소스는 수정하지 않았으며 [호스트의 주행 차단 문제](docs/reference_host/2026-10-01.md)는 별도로 남아 있습니다.
 
 ## 설치와 실행 명령어
 
@@ -630,7 +637,7 @@ ros2 topic echo "/$ROBOT_ID/mission/diagnostics"
 
 ## 검증과 관련 문서
 
-이번 네임스페이스·완료 판정·테스트 호스트 변경은 자동 테스트 **43개**를 실행해 통과했습니다(추가 정밀 확인 2개 포함, 한도 50개). 이전 동기화의 556개 검사·빌드 기록은 별도 이력으로 보관합니다. 새 Action 연동·속도 제한의 **실제 로봇 통합 주행 검증은 남아 있습니다.** 기존 본체의 `stack smashing detected` / 종료 코드 `-6` 문제도 해결된 것으로 표시하지 않습니다.
+최신 로봇 통신 변경분과 지정 호스트 client 연동은 자동 테스트 **39회**를 실행해 통과했습니다(재실행 없음, 한도 50회). [검증 범위](docs/communication_sync_2026-10-01.md)를 확인하세요. 이전 동기화의 556개 검사·빌드 기록은 별도 이력으로 보관합니다. 새 Action 연동·속도 제한의 **실제 로봇 통합 주행 검증은 남아 있습니다.** 기존 본체의 `stack smashing detected` / 종료 코드 `-6` 문제도 해결된 것으로 표시하지 않습니다.
 
 | 문서 | 내용 |
 |---|---|

@@ -13,7 +13,10 @@ if [[ ! -r "$PROFILE" || "$OLD" != "$MODE" ]];then
  printf '%s
 ' "$MODE" > "$PROFILE.tmp";mv "$PROFILE.tmp" "$PROFILE"
  if systemctl --user is-active --quiet "$ROBOT-camera.service";then
-  systemctl --user restart "$ROBOT-camera.service"
+  # Dynamic libcamera controls preserve the capture process and image connection.
+  if ! /usr/bin/python3 "$HERE/docking_warm_client.py" "$ROBOT" --profile "$MODE";then
+    systemctl --user restart "$ROBOT-camera.service"
+  fi
  fi
 fi
 bash "$NAV/ensure_camera.sh"

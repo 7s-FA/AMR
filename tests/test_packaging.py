@@ -14,6 +14,7 @@ def test_materialized_runtime_has_all_manifest_files_and_no_host_dependency(tmp_
     assert json.loads((nav/'action_profile.json').read_text())['action_name']=='/'+robot+'/data'
     assert not (camera/'camera_node.py').exists() and not (camera/'start_nav_base.sh').exists()
     assert not (nav/'run_docking_departure_once.sh').exists()
+    assert (nav/'communication_guard.py').read_bytes()==(camera/'communication_guard.py').read_bytes()
     assert (camera/'camera.yaml').exists() and (camera/'docking_vision/board.py').exists()
     assert (ws/'host_ws/src/host_pkg/action/Burger.action').exists()
     assert (ws/'host_ws/src/waffle_navigation/maps/factory_map.pgm').exists()

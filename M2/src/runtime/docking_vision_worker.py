@@ -59,7 +59,7 @@ def run_preview(config, frames, stop):
             rclpy.shutdown()
 
 
-def run_vision(config, channel, frames, stop, progress=None, active=None):
+def run_vision(config, channel, frames, stop, progress=None, active=None, mode_index=None, configurations=None):
     import cv2
     from docking_vision.board import BoardDetector, DockingBoard
     from docking_vision.vision import load_calibration
@@ -68,8 +68,9 @@ def run_vision(config, channel, frames, stop, progress=None, active=None):
     source = None
     try:
         cv2.setNumThreads(1)
-        detector = BoardDetector(DockingBoard.load(config['board_path']),
-                                 load_calibration(config['calibration_path']))
+        configurations = configurations or [config]
+        detectors = [BoardDetector(DockingBoard.load(c['board_path']),
+                                   load_calibration(c['calibration_path'])) for c in configurations]
         source = RosSource(config['vision']['camera_topic'])
         sequence, last_preview, last_detection = 0, float('-inf'), float('-inf')
         while not stop.is_set():
@@ -85,11 +86,14 @@ def run_vision(config, channel, frames, stop, progress=None, active=None):
             last_detection = started
             if progress is not None:
                 progress[0] = started
-            observation, annotated = detector.detect(frame)
+            selected = int(mode_index.value) if mode_index is not None else 0
+            selected_config = configurations[selected]
+            observation, annotated = detectors[selected].detect(frame)
             if progress is not None:
                 progress[1] = time.monotonic()
             sequence += 1
             observation.update(metadata, sequence=sequence, status='ok',
+                               vision_mode=selected_config.get('docking_mode', 'normal'),
                                detection_ms=(time.monotonic()-started)*1000)
             # Deliver control data BEFORE optional display work. No ROS observation input.
             put_latest(channel, observation)
@@ -106,9 +110,13 @@ def run_vision(config, channel, frames, stop, progress=None, active=None):
 
 
 class LocalVision:
-    def __init__(self, config):
+    def __init__(self, config, modes=None):
         import multiprocessing as mp
         ctx = mp.get_context('spawn')
+        modes = modes or {config.get('docking_mode', 'normal'): config}
+        self.mode_names = list(modes)
+        self.mode_index = ctx.Value('i', 0, lock=False)
+        configurations = list(modes.values())
         self.channel = ctx.Queue(maxsize=1)
         self.frames = ctx.Queue(maxsize=1)
         self.stop = ctx.Event()
@@ -116,10 +124,19 @@ class LocalVision:
         self.active.set()
         # Best-effort telemetry must not block control if the worker is killed.
         self.progress = ctx.Array('d', [0., 0.], lock=False)
-        self.process = ctx.Process(target=run_vision, args=(config, self.channel, self.frames, self.stop, self.progress, self.active), daemon=True)
+        self.process = ctx.Process(target=run_vision, args=(config, self.channel, self.frames, self.stop, self.progress, self.active, self.mode_index, configurations), daemon=True)
         self.preview = ctx.Process(target=run_preview, args=(config, self.frames, self.stop), daemon=True)
         self.process.start()
         self.preview.start()
+
+    def set_mode(self, mode):
+        if mode not in self.mode_names:
+            raise ValueError('Vision mode was not preloaded: '+mode)
+        self.mode_index.value = self.mode_names.index(mode)
+        # Small control records only; never drain the large preview pipe here.
+        for _ in range(3):
+            try:self.channel.get_nowait()
+            except queue.Empty:break
 
     def set_active(self, active):
         self.active.set() if active else self.active.clear()
@@ -127,7 +144,7 @@ class LocalVision:
     def health(self):
         now = time.monotonic()
         received, detected = self.progress[:]
-        return {'full_rate': self.active.is_set(), 'detector_alive': self.process.is_alive(), 'preview_alive': self.preview.is_alive(),
+        return {'mode': self.mode_names[int(self.mode_index.value)], 'available_modes': self.mode_names, 'full_rate': self.active.is_set(), 'detector_alive': self.process.is_alive(), 'preview_alive': self.preview.is_alive(),
                 'last_raw_read_age_s': now-received if received else None,
                 'last_detection_age_s': now-detected if detected else None}
 

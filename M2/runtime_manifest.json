@@ -6,12 +6,12 @@
     {
       "source": "M2/src/runtime/docking_node.py",
       "target": "camera/docking_node.py",
-      "sha256": "392f3c035215129152a59c1e203c8257beaec0e3a6a83ab74da3084ae773e16e"
+      "sha256": "64fe25b36d7b605872aa2fc4b730760244f87d181e8b26f9333940dc1b88230d"
     },
     {
       "source": "M2/src/runtime/docking_vision_worker.py",
       "target": "camera/docking_vision_worker.py",
-      "sha256": "dbae4bcf0a3abea966ea41114d5a833b2a10d6ff9110746edd5fccd360a1e6a6"
+      "sha256": "0c0f00c21218a0eb74f0b6632bd3e4480e2c0217922d0842b4a1f38acd62607c"
     },
     {
       "source": "common/runtime/docking_control.py",
@@ -76,7 +76,7 @@
     {
       "source": "M2/src/runtime/start_camera.sh",
       "target": "camera/start_camera.sh",
-      "sha256": "b47e55f3cff42a658044a2508709a386d2e1c2cfe7e1e95227417671e3d7cfe2"
+      "sha256": "36c99c385aaa2c0203a56b98b820c135ecdf02ad68112591d4c82fd2dbe2a4f0"
     },
     {
       "source": "M2/config/camera.yaml",
@@ -121,7 +121,7 @@
     {
       "source": "M2/src/navigation/manage.sh",
       "target": "workspace/robot/burger2/navigation/manage.sh",
-      "sha256": "c8a933dad20e0cca4c71bdc2d76e37268a5a80fc68d4e516b12940adb5ae8d14"
+      "sha256": "39f2d8f0e2135ea56d0767496fc552ddaa5f4def34c31331884f8a4332941bc1"
     },
     {
       "source": "M2/src/navigation/warm.sh",
@@ -136,7 +136,7 @@
     {
       "source": "common/navigation/motion_owner.py",
       "target": "workspace/robot/burger2/navigation/motion_owner.py",
-      "sha256": "0ec696cb77a6d227502445dc73a389c431c38cf45b5d4b536ac97574283c8ede"
+      "sha256": "9982a9327666630d809dd14b8f267cbc936670bbc927c365eb0b090db5ddb0b6"
     },
     {
       "source": "M2/src/navigation/set_mode.sh",
@@ -221,7 +221,7 @@
     {
       "source": "common/navigation/rest_forward.py",
       "target": "workspace/robot/burger2/navigation/rest_forward.py",
-      "sha256": "75109a4f001f9d76d7a747db74c0dcde94e0fb97f8fe2a564294b7de00c5e03f"
+      "sha256": "ace40f54af5dd547c8266e5d34f25e015d6914ba593bb984d8355bb3d36563a8"
     },
     {
       "source": "common/navigation/nav_control_service.sh",
@@ -271,7 +271,7 @@
     {
       "source": "common/docking_vision/source.py",
       "target": "camera/docking_vision/source.py",
-      "sha256": "89ca3794ae6b5738327f56ce41bd120d7338c8982200b3f9b8824b4eb32a577e"
+      "sha256": "1df48fdbad985dcbf7521d3f5fe62f1f7e69512c905bb0d1d693601cf140ef8f"
     },
     {
       "source": "common/docking_vision/docking_config.py",
@@ -586,17 +586,17 @@
     {
       "source": "M2/src/runtime/camera_profile.sh",
       "target": "camera/camera_profile.sh",
-      "sha256": "9f4ad69cb603854722438e9b3f5b4e70b27fb49f7a6bed6d021d68e39fd0071e"
+      "sha256": "5b3ef3b08e243ba2bacf6b12f36df2ae0023872dde923f0f1738d7ac2d74640b"
     },
     {
       "source": "common/runtime/docking_standby.py",
       "target": "camera/docking_standby.py",
-      "sha256": "aae383e25387f681f75386b73cd5d1d8b35905302e52322b3f4406776be79b81"
+      "sha256": "043e8b06c706cd3f6550efab29e45450b831d00a799c44a96a089e1fbc6f203c"
     },
     {
       "source": "common/runtime/docking_warm_client.py",
       "target": "camera/docking_warm_client.py",
-      "sha256": "f3c7eb4a3ed647ffdb83378083a90515e1fafd23125139ec335706655287f382"
+      "sha256": "4e2a9b268ec78fe847afa776a0a03959d9d3bd5357ae031af2e8901459122cf1"
     },
     {
       "source": "common/runtime_env/ros_setup_cache.py",
@@ -636,7 +636,7 @@
     {
       "source": "M2/src/runtime/start_docking_engine.sh",
       "target": "camera/start_docking_engine.sh",
-      "sha256": "5b86f3df364ea0ec7078d821943fbf66c53b027f0302cebd2d265f6c3c521f89"
+      "sha256": "23f2dad67fc90c4444125cb4355cb7f11e1c9ca383a47f2dd28c9e617ca51822"
     },
     {
       "source": "M2/src/runtime/start_docking_standby.sh",
@@ -647,6 +647,16 @@
       "source": "common/navigation/terminal_evidence.py",
       "target": "workspace/robot/burger2/navigation/terminal_evidence.py",
       "sha256": "e1e061d34e38e1e1bcbbb13f0c7d3aee838e9292da20c7afafd4104181945a26"
+    },
+    {
+      "source": "common/runtime/communication_guard.py",
+      "target": "camera/communication_guard.py",
+      "sha256": "1e325721d12c1fb62f8a73df6575b327201b2653c3198439f8ec06fbeb17702d"
+    },
+    {
+      "source": "common/runtime/communication_guard.py",
+      "target": "workspace/robot/burger2/navigation/communication_guard.py",
+      "sha256": "1e325721d12c1fb62f8a73df6575b327201b2653c3198439f8ec06fbeb17702d"
     }
   ]
 }
