@@ -19,7 +19,7 @@ git clone --branch jh https://github.com/7s-FA/AMR.git "$HOME/AMR"
 ```bash
 ROBOT_ID=M2
 AMR_RUNTIME="$HOME/amr_runtime/$ROBOT_ID"
-AMR_ACTION="/${ROBOT_ID,,}/data"
+AMR_ACTION="/$ROBOT_ID/data"
 if [[ "$ROBOT_ID" == M1 ]]; then
   RUNTIME_ROBOT=burger1
   AMR_CAMERA=final_robot_camera_burger1
@@ -150,11 +150,11 @@ journalctl --user -u "${ROBOT_ID,,}-action.service" \
   -u "$RUNTIME_ROBOT-mission.service" -n 100 --no-pager
 journalctl --user -u "$RUNTIME_ROBOT-base.service" \
   -u "$RUNTIME_ROBOT-nav2.service" -n 100 --no-pager
-ros2 topic echo "/${ROBOT_ID,,}/mission/diagnostics"
+ros2 topic echo "/$ROBOT_ID/mission/diagnostics"
 ```
 
 | 기록 | 생성 위치 |
 |---|---|
 | 경로 명령별 결과 | `$AMR_RUNTIME/final_robot_ws/data/$RUNTIME_ROBOT/commands/` |
 | 종단 도킹·대기 로그 | `$AMR_RUNTIME/final_robot_ws/data/$RUNTIME_ROBOT/terminal_logs/` |
-| Action 상세 원인 | `/${ROBOT_ID,,}/mission/diagnostics` 토픽과 Action 서비스 journal |
+| Action 상세 원인 | `/$ROBOT_ID/mission/diagnostics` 토픽과 Action 서비스 journal |

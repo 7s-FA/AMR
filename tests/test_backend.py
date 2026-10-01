@@ -36,3 +36,13 @@ def test_server_restart_latches_unfinished_goal(backend):
 def test_individual_mode_rejects_host_submit(backend):
     backend.atomic(backend.op.data/'operation_mode.json',{'mode':'individual'})
     with pytest.raises(RuntimeError):backend.submit('GO_TO_REST',100.,'wrong-mode')
+
+
+def test_authorization_read_does_not_renew_or_clear_latch(backend):
+    backend.submit('GO_TO_ASM',50.,'goal-read')
+    before=backend.path.read_bytes()
+    assert backend.authorized('goal-read')
+    assert not backend.authorized('different-goal')
+    assert backend.path.read_bytes()==before
+    backend.stop()
+    assert not backend.authorized('goal-read')

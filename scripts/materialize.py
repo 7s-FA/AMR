@@ -55,7 +55,7 @@ unset FASTRTPS_DEFAULT_PROFILES_FILE FASTDDS_DEFAULT_PROFILES_FILE
     action.write_text(f'''#!/usr/bin/env bash
 set -eo pipefail
 source "{nav}/nav_env.bash"
-exec ros2 run amr_mission action_server --ros-args -p robot_id:={robot} -p runtime_robot:={n} -p navigation_dir:={nav} -p action_name:={profile['action_name']} "$@"
+exec ros2 run amr_mission action_server --ros-args -r __ns:=/{robot} -p robot_id:={robot} -p runtime_robot:={n} -p navigation_dir:={nav} -p action_name:={profile['action_name']} "$@"
 ''');action.chmod(0o755)
     (units/f'{robot.lower()}-action.service').write_text(f'[Unit]\nDescription={robot} robot action server\nAfter={n}-motion-owner.service\n[Service]\nType=simple\nExecStart=/bin/bash {action}\nKillSignal=SIGINT\nTimeoutStopSec=25\nRestart=no\n')
     (out/'runtime.json').write_text(json.dumps({'robot_id':robot,'runtime_robot':n,'workspace':str(workspace),'camera':str(camera),'navigation':str(nav),'units':str(units)},indent=2)+'\n')

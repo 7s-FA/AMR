@@ -3,6 +3,14 @@ import argparse,copy,math
 from pathlib import Path
 import yaml
 
+def terminal_mode(stations, destination):
+    if destination not in stations.get('routes', {}):
+        raise ValueError('Unknown destination: '+destination)
+    mode = stations.get('terminal', {}).get(destination)
+    if mode not in ('dock', 'park', 'rest'):
+        raise ValueError('Missing or invalid terminal action: '+destination)
+    return mode
+
 def build_route(base, stations, selection):
     if selection in stations['routes']:
         names=stations['routes'][selection]
