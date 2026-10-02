@@ -49,11 +49,11 @@ class StopMonitor:
         return self.fresh(now) and self.since is not None and now-self.since >= self.hold
 
 
-def main():
+def main(argv=None, prepared=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--config', required=True)
     p.add_argument('--check', action='store_true', help='설정 확인만; GPIO/모터 접근 없음')
-    a = p.parse_args()
+    a = p.parse_args(argv)
     import yaml
     cfg = yaml.safe_load(Path(a.config).read_text())
     params = settings(cfg)
@@ -68,26 +68,32 @@ def main():
     from nav_msgs.msg import Odometry
     from rclpy.qos import qos_profile_sensor_data
     from communication_guard import GraphGuard
-    gpio = node = guard = None
+    gpio = node = guard = pub = None
+    owns_connections = prepared is None
     stopping = False
     result = 1
     def stop_signal(*_):
         nonlocal stopping
         stopping = True
-    rclpy.init(args=[])
-    signal.signal(signal.SIGINT, stop_signal)
-    signal.signal(signal.SIGTERM, stop_signal)
+    if owns_connections:
+        rclpy.init(args=[])
+        signal.signal(signal.SIGINT, stop_signal)
+        signal.signal(signal.SIGTERM, stop_signal)
     try:
         gpio = GPIOInput(cfg['gpio_chip'], cfg['gpio_pin'])
         robot = cfg['cmd_topic'].strip('/').split('/')[0]
-        node = rclpy.create_node('rest_forward', namespace='/' + robot)
+        node = (rclpy.create_node('rest_forward', namespace='/' + robot)
+                if owns_connections else prepared.node)
         monitor = StopMonitor(params['odom_timeout_s'], params['stopped_hold_s'])
         def on_odom(msg):
             stamp = msg.header.stamp.sec + msg.header.stamp.nanosec / 1e9
             age = node.get_clock().now().nanoseconds / 1e9 - stamp
             v = msg.twist.twist
             monitor.update(stamp, age, math.hypot(v.linear.x, v.linear.y), v.angular.z, time.monotonic())
-        node.create_subscription(Odometry, cfg['odom_topic'], on_odom, qos_profile_sensor_data)
+        if owns_connections:
+            node.create_subscription(Odometry, cfg['odom_topic'], on_odom, qos_profile_sensor_data)
+        else:
+            prepared.on_odom = on_odom  # New monitor; require feedback from this execution.
         pub = node.create_publisher(TwistStamped, cfg['cmd_topic'], 1)
         def publish(v):
             msg = TwistStamped()
@@ -96,7 +102,8 @@ def main():
             msg.twist.linear.x = float(v)
             msg.twist.angular.z = 0.0
             pub.publish(msg)
-        guard = GraphGuard(cfg['cmd_topic'], node.get_name(), node.get_namespace(), 'rest')
+        guard = (GraphGuard(cfg['cmd_topic'], node.get_name(), node.get_namespace(), 'rest')
+                 if owns_connections else prepared.guard)
         def graph_ready():
             error = guard.snapshot()['error']
             if error == 'cmd_vel_has_other_publisher_or_graph_not_ready':
@@ -154,19 +161,23 @@ def main():
             result = 130
         return result
     finally:
-        if node is not None and rclpy.ok():
+        if pub is not None and node is not None and rclpy.ok():
             # Repeat zeros on normal arrival, Ctrl-C, service stop, and GPIO errors.
             end = time.monotonic() + .5
             while time.monotonic() < end:
                 publish(0)
                 rclpy.spin_once(node, timeout_sec=.02)
-        if guard is not None:
+        if owns_connections and guard is not None:
             guard.close()
         if gpio is not None:
             gpio.close()
-        if node is not None:
+        if not owns_connections:
+            prepared.on_odom = None
+            if pub is not None:
+                node.destroy_publisher(pub)  # No command publisher or GPIO lease in standby.
+        elif node is not None:
             node.destroy_node()
-        if rclpy.ok():
+        if owns_connections and rclpy.ok():
             rclpy.shutdown()
 
 if __name__ == '__main__':

@@ -27,7 +27,7 @@ def gate_output(path,v,w,now=None):
 
 def departure_speed(path):
     g=load_gate(path)
-    if not g or not g.get('goal_id'):return .05
-    v,_=gate_output(path,.05,0.)
+    if not g or not g.get('goal_id'):return .045
+    v,_=gate_output(path,.045,0.)
     if v<=0:raise RuntimeError('Action stop latch or stale heartbeat prevents departure')
     return v

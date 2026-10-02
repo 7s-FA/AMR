@@ -1294,7 +1294,7 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
     return 0
 
 
-def main():
+def main(argv=None, prepared_nav=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--namespace', default='', help='Robot namespace and TF frame prefix')
     parser.add_argument('--waypoints', default=str(Path(
@@ -1332,14 +1332,14 @@ def main():
                         help='5cm 이내 Nav2 저속 XY/yaw 동시 보정; 모든 지점 2cm/3도 검증')
     parser.add_argument('--final-staging-distance', type=float, default=0.0,
                         help='최종 방향을 먼저 맞출 진입점 거리(m), 0이면 기존 접근; 전진 전용')
-    args = parser.parse_args(remove_ros_args()[1:])
+    args = parser.parse_args(remove_ros_args(args=argv)[1:])
     if not math.isfinite(args.prealign_heading_deg) or not 45 <= args.prealign_heading_deg <= 120:
         parser.error("prealign-heading-deg must be between 45 and 120")
     if args.final_post_turn_xy_tolerance is not None and (
             not args.nav2_position_then_yaw or
             not math.isfinite(args.final_post_turn_xy_tolerance) or
-            not 0 < args.final_post_turn_xy_tolerance <= .05):
-        parser.error('--final-post-turn-xy-tolerance는 좌표 도착 후 정렬 모드에서 0 초과 0.05 m 이하로 지정하세요.')
+            not 0 < args.final_post_turn_xy_tolerance <= .06):
+        parser.error('--final-post-turn-xy-tolerance는 좌표 도착 후 정렬 모드에서 0 초과 0.06 m 이하로 지정하세요.')
     if args.nav2_precision_pose and (args.nav2_position_then_yaw or args.continuous_intermediate or args.final_staging_distance):
         parser.error('정밀 접근은 다른 접근/정렬 모드와 함께 사용할 수 없습니다.')
     if args.nav2_position_then_yaw and (args.continuous_intermediate or args.final_staging_distance):
@@ -1415,8 +1415,12 @@ def main():
         return 0
 
     # Ctrl+C 시 ROS context를 먼저 닫지 않고 액션 취소를 요청합니다.
-    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
-    nav = WaypointNavigator(namespace=args.namespace)
+    owns_navigator = prepared_nav is None
+    if owns_navigator:
+        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    elif prepared_nav.get_namespace().strip("/") != args.namespace.strip("/"):
+        raise ValueError("Prepared navigator namespace mismatch")
+    nav = prepared_nav if prepared_nav is not None else WaypointNavigator(namespace=args.namespace)
     nav.final_yaw_tolerance = (math.radians(args.final_yaw_tolerance_deg)
                                if args.final_yaw_tolerance_deg is not None else None)
     nav.prealign_heading_deg = args.prealign_heading_deg
@@ -1446,9 +1450,10 @@ def main():
         cancel_and_wait(nav)
         return 1
     finally:
-        nav.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        if owns_navigator:
+            nav.destroy_node()
+            if rclpy.ok():
+                rclpy.shutdown()
 
 
 if __name__ == '__main__':

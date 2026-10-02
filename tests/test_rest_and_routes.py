@@ -14,7 +14,7 @@ from client import request_values
 def test_rest_settings_are_independent():
     cfg = yaml.safe_load((ROOT/'M2/config/docking.yaml').read_text())
     cfg['control']['final_speed_mps'] = 99
-    assert settings(cfg)['speed_mps'] == .039
+    assert settings(cfg)['speed_mps'] == .0351
     cfg['rest_control']['odom_timeout_s'] = 2
     with pytest.raises(ValueError): settings(cfg)
 

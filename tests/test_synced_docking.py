@@ -59,9 +59,9 @@ def test_shared_controller_stops_immediately_on_stale_vision_or_ir(robot):
     assert c.tick(.61) == (0., 0.) and c.state == 'STOPPED'
 
 
-@pytest.mark.parametrize('robot,speed,turn', [('M1', .039, .234), ('M2', .0468, .2808)])
-def test_parking_retains_original_profile_limits(robot, speed, turn):
+@pytest.mark.parametrize('robot,align,final,turn', [('M1', .0351, .02808, .234), ('M2', .04212, .033696, .2808)])
+def test_parking_retains_onboard_profile_limits(robot, align, final, turn):
     c = make_controller(robot, 'parking')
     assert not c.cfg.board_normal_tracking and not c.cfg.inverse_yaw_speed
-    assert c.cfg.align_speed_mps == speed and c.cfg.final_speed_mps == speed
+    assert c.cfg.align_speed_mps == align and c.cfg.final_speed_mps == final
     assert c.cfg.max_angular_rps == turn and c.cfg.angular_speed_scale == 1.
