@@ -2,6 +2,8 @@
 
 [전체 README](../README.md) · [호스트 Action 계약](host_interface.md)
 
+기존 `/home/ubuntu/final_robot_ws` 배포를 전원 투입 후 호스트와 연결할 때는 [M1/M2 시작 절차](host_startup_2026-10-02.md)를 참고하세요. 초기 위치 확인, 토크 확인, 서버 시작 후 정지 검증과 `RESTART` 순서를 포함합니다.
+
 **아래 설치·개별 시험 명령은 해당 로봇의 터미널에서 실행합니다.** 호스트 PC의 기존 `burger2` alias와는 별개입니다. M1과 M2 각각 설치하며, 한 번에 한 로봇의 경로만 시험해도 됩니다.
 
 ### 1. 저장소와 실행 대상 선택

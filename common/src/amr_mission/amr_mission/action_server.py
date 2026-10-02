@@ -81,6 +81,8 @@ class MissionServer(Node):
             except Exception as e:self.report('heartbeat_failed',str(e),goal_id)
     def feedback(self,handle):
         pose=self.pose
+        self.get_logger().info(f"pose: {pose} 포즈 들어 왔어요")
+        print(f"pose: {pose}")
         if pose is None or time.monotonic()-pose[2]>1.:return
         f=Burger.Feedback();f.robot_x=float(pose[0]);f.robot_y=float(pose[1]);f.robot_theta=self.direction;f.message='IDLE';handle.publish_feedback(f)
     def execute(self,handle):
