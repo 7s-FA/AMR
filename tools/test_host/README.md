@@ -16,13 +16,16 @@ bash tools/test_host/build.sh
 먼저 [로봇 설치 안내](../../docs/commands.md)에 따라 최신 런타임을 생성·빌드하고 `amr` 함수를 설정합니다. 아래는 **로봇 터미널** 명령입니다.
 
 ```bash
-amr mode process
+amr mode individual
 # 실제로 지정 주차 위치와 방향이 맞는 경우에만: amr parked
 amr ready
+amr mode process
 amr action
 ```
 
 개별 시험용 호스트도 ROS Action으로 접수하므로 로봇은 `process` 모드를 사용합니다. `individual`은 로봇 내부 CLI용입니다. 여러 로봇이나 자동 공정을 실행할 필요는 없습니다. 이미 Action 서비스를 실행 중이라면 `amr action`을 중복 실행하지 않습니다.
+
+정지 잠금이 있으면 서버 준비 후 최신 odom으로 정지가 확인된 상태에서 `RESTART` 성공을 확인하고 이동을 요청합니다. 기존 배포의 전원 투입·토크·서비스 실행 순서는 [M1/M2 시작 절차](../../docs/host_startup_2026-10-02.md)를 따릅니다.
 
 ## 3. PC에서 한 경로 전송
 
