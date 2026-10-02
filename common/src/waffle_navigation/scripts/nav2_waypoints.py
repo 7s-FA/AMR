@@ -1332,8 +1332,8 @@ def main():
     if args.final_post_turn_xy_tolerance is not None and (
             not args.nav2_position_then_yaw or
             not math.isfinite(args.final_post_turn_xy_tolerance) or
-            not 0 < args.final_post_turn_xy_tolerance <= .05):
-        parser.error('--final-post-turn-xy-tolerance는 좌표 도착 후 정렬 모드에서 0 초과 0.05 m 이하로 지정하세요.')
+            not 0 < args.final_post_turn_xy_tolerance <= .06):
+        parser.error('--final-post-turn-xy-tolerance는 좌표 도착 후 정렬 모드에서 0 초과 0.06 m 이하로 지정하세요.')
     if args.nav2_precision_pose and (args.nav2_position_then_yaw or args.continuous_intermediate or args.final_staging_distance):
         parser.error('정밀 접근은 다른 접근/정렬 모드와 함께 사용할 수 없습니다.')
     if args.nav2_position_then_yaw and (args.continuous_intermediate or args.final_staging_distance):

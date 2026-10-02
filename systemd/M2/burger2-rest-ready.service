@@ -1,0 +1,14 @@
+[Unit]
+Description=Burger2 REST standby (no idle GPIO or motor publisher)
+PartOf=burger2-nav-control.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /home/ubuntu/final_robot_ws/robot/burger2/navigation/start_rest_ready.sh
+Environment=ROS_DOMAIN_ID=40
+Environment=RCUTILS_LOGGING_BUFFERED_STREAM=0
+Restart=on-failure
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=12
+UMask=0077

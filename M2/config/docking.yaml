@@ -11,8 +11,8 @@ parking_control:
   staging_distance_m: 0.30
   board_normal_tracking: false
   inverse_yaw_speed: false
-  align_speed_mps: 0.0468
-  final_speed_mps: 0.0468
+  align_speed_mps: 0.04212
+  final_speed_mps: 0.033696
   max_angular_rps: 0.2808
   near_angular_rps: 0.2808
   steering_accel_rps2: 1000.0
@@ -51,8 +51,8 @@ control:
   lateral_tolerance_m: 0.005
   yaw_tolerance_deg: 2.0
   aligned_hold_s: 0.4
-  align_speed_mps: 0.039
-  final_speed_mps: 0.039
+  align_speed_mps: 0.0351
+  final_speed_mps: 0.02808
   # 일반 도킹 회전 명령·가속을 기존의 60%로 적용 (최대 0.192 rad/s).
   angular_speed_scale: 0.6
   max_angular_rps: 0.32
@@ -78,7 +78,7 @@ control:
 
 # REST is independent of normal/parking docking speed and timeout tuning.
 rest_control:
-  speed_mps: 0.039
+  speed_mps: 0.0351
   max_time_s: 90.0
   odom_timeout_s: 0.3
   stopped_hold_s: 0.5

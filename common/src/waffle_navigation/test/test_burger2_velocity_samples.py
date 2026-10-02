@@ -29,7 +29,7 @@ int main(int argc,char**argv){
     assert all(v == 0 or v >= .025 for v in samples)
     assert .025 <= min(v for v in samples if v > 0) <= .03
     assert 'waffle_navigation::PositionApproach' in c['critics']
-    expected_speed, expected_turn = (.06336, .648 if robot == 'burger1' else .49896)
+    expected_speed, expected_turn = .057024, .358891949
     assert c['max_speed_xy'] == expected_speed and c['max_vel_theta'] == expected_turn
     assert 'RotateToGoal' not in c['critics'] and 'BaseObstacle' in c['critics']
     assert p['collision_monitor']['ros__parameters']['scan']['enabled']

@@ -3,7 +3,7 @@ set -eo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROBOT=$(basename "$(dirname "$HERE")")
 CAMERA_ROOT=$HOME/final_robot_camera
-[[ "$ROBOT" != burger1 ]] || CAMERA_ROOT=$HOME/final_robot_camera_burger1
+[[ "$ROBOT" != burger1 ]] || CAMERA_ROOT=/home/ubuntu/final_robot_camera_burger1
 if ! systemctl --user is-active --quiet "$ROBOT-base.service";then
  if pgrep -u "$USER" -f '[/]turtlebot3_ros|[/]ld08_driver|[b]ase.launch.py' >/dev/null;then
   echo '수동 본체 실행을 먼저 종료하세요.' >&2;exit 1
@@ -28,3 +28,10 @@ python3 "$HERE/check_ready.py" burger1 "${WARM_READY_ARGS[@]}"
 unset WARM_READY_ARGS
 flock -u 7
 exec 7>&-
+
+# Prepare ROS connections once; no goals or motor/GPIO commands.
+# Preparation failure uses the original per-route path.
+bash "$HERE/ensure_waypoint_ready.sh" || echo "웨이포인트 연결 사전 준비 실패: 기존 실행 경로 유지" >&2
+
+# REST standby retains feedback/graph connections; owns no GPIO or speed publisher.
+bash "$HERE/ensure_rest_ready.sh" || echo 'REST 사전 준비 실패: 기존 실행 경로 유지' >&2

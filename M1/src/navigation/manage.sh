@@ -4,12 +4,15 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 ROBOT=$(basename "$(dirname "$HERE")")
 CAMERA_ROOT=$HOME/final_robot_camera
-[[ "$ROBOT" != burger1 ]] || CAMERA_ROOT=$HOME/final_robot_camera_burger1
+[[ "$ROBOT" != burger1 ]] || CAMERA_ROOT=/home/ubuntu/final_robot_camera_burger1
 ACTION=$1
 case "$ACTION" in
  status) exec systemctl --user status "$ROBOT-base.service" "$ROBOT-localization.service" "$ROBOT-nav2.service" "$ROBOT-motion-owner.service" "$ROBOT-nav-control.service" "$ROBOT-docking.service" "$ROBOT-rest.service" --no-pager ;;
  stop|off|dock-stop)
   bash "$HERE/set_mode.sh" idle || true
+  # Prepared waypoint commands must receive the same interruption as cold CLI commands.
+  systemctl --user kill --kill-whom=main --signal=USR1 burger1-waypoint-ready.service 2>/dev/null || true
+  systemctl --user kill --kill-whom=main --signal=USR1 burger1-rest-ready.service 2>/dev/null || true
   pkill -INT -u "$USER" -f '[/]nav2_waypoints' || true
   for unit in "$ROBOT-docking.service" "$ROBOT-rest.service"; do
     state=$(systemctl --user show "$unit" --property=LoadState --value 2>/dev/null || true)
