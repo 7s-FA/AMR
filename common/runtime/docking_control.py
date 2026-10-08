@@ -28,14 +28,19 @@ class Settings:
     steering_accel_rps2: float = 0.8
     far_steering_gain: float = 1.25
     angular_speed_scale: float = 1.0
-    inverse_yaw_speed: bool = False
-    board_normal_tracking: bool = False
+    angular_kd: float = 0.0
+    angular_rate_filter_s: float = 0.1
     observation_timeout_s: float = 0.5
     vision_recovery_timeout_s: float = 2.0
     vision_recovery_hold_s: float = 0.3
     vision_recovery_fresh_s: float = 0.25
     max_vision_recoveries: int = 3
     odom_timeout_s: float = 0.3
+    odom_recovery_enabled: bool = False
+    odom_recovery_timeout_s: float = 2.0
+    odom_recovery_hold_s: float = 0.3
+    odom_recovery_fresh_s: float = 0.15
+    max_odom_recoveries: int = 3
     ir_timeout_s: float = 0.1
     max_final_distance_m: float = 0.30
     max_final_time_s: float = 12.0
@@ -48,16 +53,23 @@ class Settings:
     def __post_init__(self):
         for f in fields(self):
             x = getattr(self, f.name)
-            if f.name in ('inverse_yaw_speed', 'board_normal_tracking'):
+            if f.name == 'odom_recovery_enabled':
                 if type(x) is not bool:
                     raise ValueError(f'{f.name} must be Boolean')
                 continue
             if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
                 raise ValueError(f'{f.name} must be finite')
-            if not f.name.startswith('camera_') and x <= 0:
+            if f.name == 'angular_kd':
+                if x < 0:
+                    raise ValueError('angular_kd must be nonnegative')
+            elif not f.name.startswith('camera_') and x <= 0:
                 raise ValueError(f'{f.name} must be positive')
         if type(self.max_vision_recoveries) is not int:
             raise ValueError('max_vision_recoveries must be an integer')
+        if (type(self.max_odom_recoveries) is not int
+                or self.odom_recovery_fresh_s > self.odom_timeout_s
+                or self.odom_recovery_hold_s >= self.odom_recovery_timeout_s):
+            raise ValueError('Invalid odometry recovery timing')
         if not (self.vision_recovery_fresh_s <= self.observation_timeout_s
                 and self.vision_recovery_hold_s < self.vision_recovery_timeout_s):
             raise ValueError('Invalid vision recovery timing')
@@ -70,12 +82,13 @@ class Settings:
 
 
 class DockingControl:
-    ACTIVE = {'ALIGN', 'VISION_WAIT', 'FINAL_APPROACH', 'STOPPING'}
+    ACTIVE = {'ALIGN', 'VISION_WAIT', 'ODOM_WAIT', 'FINAL_APPROACH', 'STOPPING'}
 
     def __init__(self, settings=None):
         self.cfg = settings or Settings()
         self.state, self.reason = 'IDLE', 'waiting_for_start'
         self.ir = self.ir_time = self.odom = self.odom_time = None
+        self.filtered_angular = 0.0
         self.observation = self.observation_time = None
         self.aligned_since = self.stopped_since = None
         self.started_at = self.final_at = None
@@ -85,6 +98,10 @@ class DockingControl:
         self.vision_wait_at = self.vision_good_since = self.recovery_stamp = None
         self.recovery_frames = 0
         self.last_steering_time = None
+        self.odom_recoveries = 0
+        self.odom_wait_at = self.odom_resume_state = self.odom_good_since = None
+        self.odom_recovery_frames = 0
+        self.recovery_motor_ready = True
 
     def halt(self, reason, fault=True):
         self.state = 'FAULT' if fault else 'STOPPED'
@@ -97,7 +114,13 @@ class DockingControl:
             raise ValueError('IR must be a physical Boolean level')
         self.ir, self.ir_time = high, now
         if high:
-            if self.state == 'FINAL_APPROACH':
+            if self.state == 'ODOM_WAIT':
+                if self.odom_resume_state in ('FINAL_APPROACH', 'STOPPING'):
+                    self.odom_resume_state = 'STOPPING'
+                    self.stopped_since = None
+                else:
+                    self.halt('ir_high_before_final_approach', fault=False)
+            elif self.state == 'FINAL_APPROACH':
                 self.state, self.reason = 'STOPPING', 'ir_high'
                 self.stopped_since = None
             elif self.state in ('ALIGN', 'VISION_WAIT'):
@@ -115,8 +138,28 @@ class DockingControl:
                 self.halt('odometry_jump')
             else:
                 self.distance += step
-                if self.state == 'FINAL_APPROACH':
+                if (self.state == 'FINAL_APPROACH' or
+                        (self.state == 'ODOM_WAIT' and self.odom_resume_state == 'FINAL_APPROACH')):
                     self.final_distance += step
+        if self.state == 'ODOM_WAIT':
+            stationary = abs(linear) <= .01 and abs(angular) <= .04
+            consecutive = (self.odom_time is not None and
+                           0 < now-self.odom_time <= self.cfg.odom_recovery_fresh_s)
+            if stationary and now > self.odom_wait_at:
+                if not consecutive or self.odom_good_since is None:
+                    self.odom_good_since, self.odom_recovery_frames = now, 1
+                else:
+                    self.odom_recovery_frames += 1
+            else:
+                self.odom_good_since, self.odom_recovery_frames = None, 0
+        # Filter measured yaw rate once per odometry sample, not control tick.
+        # A stale stream must not carry its old damping into recovery/restart.
+        dt = None if self.odom_time is None else now-self.odom_time
+        if dt is None or dt <= 0 or dt > self.cfg.odom_timeout_s:
+            self.filtered_angular = angular
+        else:
+            weight = dt/(self.cfg.angular_rate_filter_s+dt)
+            self.filtered_angular += weight*(angular-self.filtered_angular)
         self.odom, self.odom_time = values, now
 
     def set_observation(self, observation, now):
@@ -185,9 +228,59 @@ class DockingControl:
         self.vision_recoveries = 0
         self.vision_wait_at = self.vision_good_since = self.recovery_stamp = None
         self.recovery_frames = 0
+        self.odom_recoveries = 0
+        self.odom_wait_at = self.odom_resume_state = self.odom_good_since = None
+        self.odom_recovery_frames = 0
         return True, self.state
 
+    def wait_for_odom(self, now):
+        # No sleeping, new thread or ROS query: existing ticks keep sending zero.
+        if self.odom_recoveries >= self.cfg.max_odom_recoveries:
+            self.halt('odometry_recovery_limit')
+            return
+        self.odom_resume_state = self.state
+        self.state, self.reason = 'ODOM_WAIT', 'odometry_timeout_waiting'
+        self.odom_wait_at = now
+        self.odom_recoveries += 1
+        self.odom_good_since = self.aligned_since = self.stopped_since = None
+        self.odom_recovery_frames = 0
+
+    def odom_wait_tick(self, now):
+        c, phase = self.cfg, self.odom_resume_state
+        if now-self.started_at >= c.max_total_time_s or self.distance >= c.max_total_distance_m:
+            self.halt('total_approach_limit')
+        elif phase == 'FINAL_APPROACH' and (now-self.final_at >= c.max_final_time_s
+                                           or self.final_distance >= c.max_final_distance_m):
+            self.halt('final_approach_limit')
+        elif phase == 'STOPPING' and now-self.final_at > c.max_final_time_s+c.stopped_hold_s+2:
+            self.halt('stop_not_confirmed')
+        elif now-self.odom_wait_at >= c.odom_recovery_timeout_s:
+            self.halt('odometry_recovery_timeout')
+        else:
+            fresh = self.fresh(self.odom_time, now, c.odom_recovery_fresh_s)
+            if not fresh:
+                self.odom_good_since, self.odom_recovery_frames = None, 0
+            ready = (fresh and self.odom_recovery_frames >= 3
+                     and self.odom_good_since is not None
+                     and now-self.odom_good_since >= c.odom_recovery_hold_s
+                     and self.recovery_motor_ready)
+            if phase != 'STOPPING':
+                ready = ready and self.fresh(self.observation_time, now, c.vision_recovery_fresh_s)
+            if phase in ('ALIGN', 'VISION_WAIT'):
+                p = self.pose()
+                ready = (ready and self.observation_time > self.odom_wait_at and p is not None
+                         and c.min_visual_distance_m < p[3] <= c.max_start_distance_m)
+            if ready:
+                self.state = 'ALIGN' if phase == 'VISION_WAIT' else phase
+                self.reason = 'odometry_recovered'
+                self.aligned_since = self.stopped_since = None
+                self.last_steering_time = None
+        return (0.0, 0.0)
+
     def turn(self, value, settling=False):
+        # PD-style rate feedback: retain the geometric P term and damp actual
+        # rotation. Do not differentiate noisy camera poses or target switches.
+        value -= self.cfg.angular_kd*self.filtered_angular
         # During translation, tiny polar-control residuals must not be amplified
         # into alternating minimum-speed turns. Keep minimum-speed correction
         # for the final stationary alignment: OpenCR quantizes angular commands
@@ -197,79 +290,37 @@ class DockingControl:
         return math.copysign(max(self.cfg.min_angular_rps,
                                  min(abs(value), self.cfg.max_angular_rps)), value)
 
-    def yaw_speed_limit(self, theta):
-        # Larger board-normal yaw errors get a lower speed ceiling.
-        # 15 degrees halves the ceiling; preserve the motor's minimum command.
-        c = self.cfg
-        return max(c.min_angular_rps,
-                   c.max_angular_rps/(1.+abs(theta)/math.radians(15.)))
-
     def tick(self, now):
         previous = self.last_command
         command = self._tick(now)
-        limit = None
-        if self.cfg.inverse_yaw_speed and self.state == 'ALIGN':
-            p = self.pose()
-            if p is not None:
-                limit = self.yaw_speed_limit(p[2]) * self.cfg.angular_speed_scale
         # Scale visual steering only; stop and straight approach remain immediate.
         command = (command[0], command[1] * self.cfg.angular_speed_scale)
-        if limit is not None:
-            command = (command[0], clamp(command[1], limit))
         # Stop commands and the latched straight segment are immediate.
         # Slew only valid visual steering, never extrapolate a lost pose.
         if self.state == 'ALIGN' and command != (0.0, 0.0):
             dt = .02 if self.last_steering_time is None else max(.001, min(.1, now-self.last_steering_time))
             step = self.cfg.steering_accel_rps2 * self.cfg.angular_speed_scale * dt
             command = (command[0], previous[1]+clamp(command[1]-previous[1],step))
-        # A newly larger yaw error lowers the ceiling immediately, even when
-        # the previous command was faster. Acceleration still uses the old slew.
-        if limit is not None:
-            command = (command[0], clamp(command[1], limit))
         self.last_steering_time = now
         self.last_command = command
         return command
-
-    def track_board_normal(self, bx, by, theta, optical_z):
-        """Follow the board-normal line with bounded heading, not a shrinking point."""
-        c = self.cfg
-        # Signed distance to the board-normal line is invariant under an in-place
-        # turn. Camera-center offset alone is not: it can cross zero mid-turn.
-        cross_track = by*math.cos(theta)-bx*math.sin(theta)
-        limit = c.near_angular_rps
-        if abs(cross_track) <= .8*c.lateral_tolerance_m:
-            self.reason = 'board_normal_heading_alignment'
-            return 0.0, clamp(self.turn(1.2*theta, settling=True), limit)
-        # Leave visual clearance. A differential drive cannot remove a lateral
-        # offset by rotating in place; do not continue forward beyond this margin.
-        clearance = optical_z-(c.min_visual_distance_m+.04)
-        if clearance <= .003:
-            self.halt('insufficient_visual_alignment_space')
-            return 0.0, 0.0
-        lookahead = max(.04, min(.12, clearance))
-        heading_offset = clamp(math.atan2(cross_track, lookahead), math.radians(15))
-        # Fresh local odometry anticipates a fraction of the observed turn lag.
-        # This is damping only: an invalid visual pose never reaches this method.
-        predicted_theta = theta-self.odom[4]*.15
-        heading_error = wrap(predicted_theta+heading_offset)
-        angular = clamp(self.turn(1.5*heading_error, settling=True), limit)
-        linear = min(c.align_speed_mps, .35*clearance)
-        self.reason = 'board_normal_tracking'
-        if abs(theta) >= math.radians(18) or abs(heading_error) >= math.radians(8):
-            linear = 0.0
-            self.reason = 'board_normal_turn_before_forward'
-        else:
-            linear = max(.01, linear*math.cos(heading_error))
-        return linear, angular
 
     def _tick(self, now):
         zero = (0.0, 0.0)
         c = self.cfg
         if self.state not in self.ACTIVE:
             return zero
+        if self.state == 'ODOM_WAIT':
+            if not self.fresh(self.ir_time, now, c.ir_timeout_s):
+                self.halt('ir_timeout')
+                return zero
+            return self.odom_wait_tick(now)
         error = self.input_error(now, vision=self.state != 'STOPPING')
         if error:
-            if error == 'vision_timeout' and self.state == 'ALIGN':
+            if error == 'odometry_timeout' and c.odom_recovery_enabled:
+                self.wait_for_odom(now)
+                return zero
+            elif error == 'vision_timeout' and self.state == 'ALIGN':
                 if self.vision_recoveries >= c.max_vision_recoveries:
                     self.halt('vision_recovery_limit')
                     return zero
@@ -355,8 +406,6 @@ class DockingControl:
         self.reason = 'visual_alignment'
         if aligned:
             return c.align_speed_mps, 0.0
-        if c.board_normal_tracking:
-            return self.track_board_normal(bx, by, theta, optical_z)
         # Forward-only polar pose controller to a point on the board normal.
         gx, gy = bx-stage*math.cos(theta), by-stage*math.sin(theta)
         rho = math.hypot(gx, gy)

@@ -256,15 +256,15 @@ controller_server:
       # 차체 횡방향 최소 속도(m/s). 차동구동 Burger는 0 유지.
       min_vel_y: 0.0
       # 차체 X 최대 속도(m/s). 후진 전용은 0; smoother 상한도 함께 확인.
-      max_vel_x: 0.108
+      max_vel_x: 0.1296
       # 차체 횡방향 최대 속도(m/s). 차동구동 Burger는 0 유지.
       max_vel_y: 0.0
       # 최대 회전 속력(rad/s). 증가하면 빠르게 회전하며 제동/추종 특성 확인 필요.
-      max_vel_theta: 0.358891949
+      max_vel_theta: 0.4306703388
       # 평면 이동 속력 하한(m/s). 음의 후진 속도 하한과는 다름.
       min_speed_xy: 0.0
       # 평면 이동 속력 상한(m/s). 전후진 모두 속력의 크기 기준.
-      max_speed_xy: 0.108
+      max_speed_xy: 0.1296
       # 회전 속력 하한(rad/s). 높으면 미세 회전에 불리할 수 있음.
       min_speed_theta: 0.0
       # X 가속도 상한(m/s²). 실제 구동계 및 smoother와 맞춤.
@@ -345,16 +345,16 @@ controller_server:
       # 차체 횡방향 최소 속도(m/s). 차동구동 Burger는 0 유지.
       min_vel_y: 0.0
       # 차체 X 최대 속도(m/s). 후진 전용은 0; smoother 상한도 함께 확인.
-      max_vel_x: 0.057024
+      max_vel_x: 0.0684288
       # 차체 횡방향 최대 속도(m/s). 차동구동 Burger는 0 유지.
       max_vel_y: 0.0
       # 최대 회전 속력(rad/s). 증가하면 빠르게 회전하며 제동/추종 특성 확인 필요.
       # 이동 중 회전은 최대 0.35 rad/s. 목표 주변 큰 원운동 억제.
-      max_vel_theta: 0.358891949
+      max_vel_theta: 0.4306703388
       # 평면 이동 속력 하한(m/s). 음의 후진 속도 하한과는 다름.
       min_speed_xy: 0.0
       # 평면 이동 속력 상한(m/s). 전후진 모두 속력의 크기 기준.
-      max_speed_xy: 0.057024
+      max_speed_xy: 0.0684288
       # 회전 속력 하한(rad/s). 높으면 미세 회전에 불리할 수 있음.
       min_speed_theta: 0.0
       # X 가속도 상한(m/s²). 실제 구동계 및 smoother와 맞춤.
@@ -402,6 +402,16 @@ controller_server:
       - Twirling
       # 장애물 cost 점수 가중치. 높이면 장애물 비용을 더 강하게 반영.
       waffle_navigation::PositionApproach.scale: 1000.0
+      waffle_navigation::PositionApproach.heading_guard_enabled: false
+      waffle_navigation::PositionApproach.continuous_steering_enabled: true
+      waffle_navigation::PositionApproach.heading_start_deg: 5.0
+      waffle_navigation::PositionApproach.heading_stop_deg: 12.0
+      waffle_navigation::PositionApproach.smooth_speed_enabled: true
+      waffle_navigation::PositionApproach.cruise_speed: 0.0684288
+      waffle_navigation::PositionApproach.approach_speed: 0.03
+      waffle_navigation::PositionApproach.arrival_radius: 0.03
+      waffle_navigation::PositionApproach.slowing_distance: 0.25
+      waffle_navigation::PositionApproach.near_rotational_limit: 0.4306703388
       BaseObstacle.scale: 0.02
       # 목표 방향 정렬 critic 가중치. 최종 yaw 허용 오차 자체가 아님.
       GoalAlign.scale: 0.0
@@ -448,7 +458,6 @@ local_costmap:
       # 실제로 로드할 costmap 레이어 목록. 목록에 없는 블록은 실행되지 않음.
       plugins:
       - obstacle_layer
-      - voxel_layer
       - inflation_layer
 
       # Oscillation.scale: 2.0
@@ -543,7 +552,6 @@ global_costmap:
       plugins:
       - static_layer
       - obstacle_layer
-      - voxel_layer
       - inflation_layer
       obstacle_layer:
         # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
@@ -671,6 +679,8 @@ behavior_server:
     # 로드할 회전/후진/대기 등 동작 플러그인 ID 목록.
     behavior_plugins:
     - spin
+    - precision_spin
+    - departure_spin
     - backup
     - drive_on_heading
     - wait
@@ -678,6 +688,11 @@ behavior_server:
     spin:
       # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
       plugin: nav2_behaviors::Spin
+    precision_spin:
+      plugin: waffle_navigation::PrecisionSpin
+    departure_spin:
+      plugin: waffle_navigation::DepartureSpin
+      max_rotational_vel: 0.775982592
     backup:
       # 로드할 플러그인 클래스. 임의 숫자 튜닝 항목이 아니며 설치된 클래스와 일치 필요.
       plugin: nav2_behaviors::BackUp
@@ -703,7 +718,7 @@ behavior_server:
     # 동작의 충돌 예측 시간(s). 길면 더 먼 구간 검사.
     simulate_ahead_time: 2.0
     # Explicit final-yaw stage: bounded pure rotation with collision checks.
-    max_rotational_vel: 0.3592512
+    max_rotational_vel: 0.43110144
     # 동작 서버 최소 회전 속력(rad/s).
     min_rotational_vel: 0.0792
     # 동작 서버 각가속도 상한(rad/s²).
@@ -912,14 +927,14 @@ velocity_smoother:
     feedback: OPEN_LOOP
     # 최대 속도 배열 [vx(m/s), vy(m/s), wz(rad/s)]. DWB 상한과 함께 확인.
     max_velocity:
-    - 0.06912
+    - 0.082944
     - 0.0
-    - 0.358891949
+    - 0.775982592
     # 최소 속도 배열 [vx, vy, wz]. 음수는 후진/반대 회전 허용.
     min_velocity:
-    - -0.06912
+    - -0.082944
     - 0.0
-    - -0.358891949
+    - -0.775982592
     # 축별 미세 속도를 0 처리하는 크기 [vx,vy,wz].
     deadband_velocity:
     - 0.0
@@ -929,12 +944,12 @@ velocity_smoother:
     velocity_timeout: 1.0
     # 축별 가속도 상한 [x(m/s²),y(m/s²),각(rad/s²)].
     max_accel:
-    - 0.396
+    - 0.12
     - 0.0
     - 0.66
     # 축별 감속도 [x,y,각], 음수 값 사용.
     max_decel:
-    - -0.5544
+    - -0.24
     - 0.0
     - -0.88
     # 오도메트리 입력 토픽.

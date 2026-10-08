@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 set -eo pipefail
 # Bound library thread pools before importing NumPy/OpenCV in spawned workers.
 export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-LOG_ROOT="${BURGER1_DOCK_LOG_ROOT:-$HOME/final_robot_ws/data/burger1/docking_logs}"
+LOG_ROOT="${BURGER1_DOCK_LOG_ROOT:-${AMR_WORKSPACE}/data/burger1/docking_logs}"
 RUN_DIR="$LOG_ROOT/$(date +%Y%m%d_%H%M%S)_$$"
 mkdir -p "$RUN_DIR"
 ln -sfn "$(basename "$RUN_DIR")" "$LOG_ROOT/latest"
@@ -15,7 +22,7 @@ systemctl --user show burger1-base.service burger1-camera.service burger1-nav2.s
 pgrep -af '[c]amera_node.py|[/]cam --|[d]ocking_node.py|[t]urtlebot3_ros' \
   > "$RUN_DIR/processes.txt" || true
 source /opt/ros/jazzy/setup.bash
-source "$HOME/turtlebot3_ws/install/setup.bash"
+if [[ -f "$HOME/turtlebot3_ws/install/setup.bash" ]]; then source "$HOME/turtlebot3_ws/install/setup.bash"; fi
 export ROS_DOMAIN_ID="${BURGER1_ROS_DOMAIN_ID:-40}"
 /usr/bin/python3 "$SCRIPT_DIR/docking_network.py" --config "$SCRIPT_DIR/docking.yaml" \
   --role robot --local-shm --output "$SCRIPT_DIR/dds_robot.xml"

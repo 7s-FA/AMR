@@ -1,3 +1,10 @@
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Sourced after handoff/pc_burger{1,2}_env.bash on the robot.
 # Match the base's UDP-only interface profile; do not start any ROS process.
 configure_nav2_network() {
@@ -14,9 +21,9 @@ configure_nav2_network() {
     echo "Unsupported Nav2 robot: $robot_id" >&2
     return 1
   fi
-  local default_base_dir="$HOME/final_robot_camera_$robot_id"
+  local default_base_dir="${AMR_CAMERA}"
   if [[ "$robot_id" == burger2 ]]; then
-    default_base_dir="$HOME/final_robot_camera"
+    default_base_dir="${AMR_CAMERA}"
   fi
   local base_dir="${BURGER_NAV2_BASE_DIR:-$default_base_dir}"
   if [[ ! -f "$base_dir/docking_network.py" || ! -f "$base_dir/docking.yaml" ]]; then

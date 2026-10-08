@@ -5,7 +5,7 @@ from rclpy.action import ActionServer,GoalResponse,CancelResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import QoSProfile, ReliabilityPolicy
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import String
@@ -26,10 +26,12 @@ class MissionServer(Node):
             raise ValueError('Action namespace must match the uppercase robot ID')
         self.group=ReentrantCallbackGroup();self.lock=threading.RLock()
         self.route_reserved=False;self.control_reserved=False;self.active_id=None
+        self.last_odom_stamp_ns=-1;self.last_pose_log_at=0.
         self.pose=None;self.odom_time=None;self.stationary_since=None;self.direction='FORWARD'
+        latest_sensor_qos=QoSProfile(depth=1,reliability=ReliabilityPolicy.BEST_EFFORT)
         self.diagnostics=self.create_publisher(String,'/'+self.robot+'/mission/diagnostics',10)
-        self.create_subscription(PoseWithCovarianceStamped,'/'+runtime+'/amcl_pose',self.on_pose,qos_profile_sensor_data,callback_group=self.group)
-        self.create_subscription(Odometry,'/'+runtime+'/odom',self.on_odom,qos_profile_sensor_data,callback_group=self.group)
+        self.create_subscription(PoseWithCovarianceStamped,'/'+runtime+'/amcl_pose',self.on_pose,latest_sensor_qos,callback_group=self.group)
+        self.create_subscription(Odometry,'/'+runtime+'/odom',self.on_odom,latest_sensor_qos,callback_group=self.group)
         self.action=ActionServer(self,Burger,name,execute_callback=self.execute,goal_callback=self.goal,
             cancel_callback=self.cancel,callback_group=self.group)
         self.create_timer(.15,self.heartbeat,callback_group=self.group)
@@ -47,6 +49,9 @@ class MissionServer(Node):
     def on_odom(self,msg):
         v,w=msg.twist.twist.linear.x,msg.twist.twist.angular.z
         if not -.1<=self.stamp_age(msg.header.stamp)<=.3 or not all(math.isfinite(x) for x in (v,w)):return
+        stamp_ns=msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
+        if stamp_ns<=self.last_odom_stamp_ns:return
+        self.last_odom_stamp_ns=stamp_ns
         now=time.monotonic()
         if self.odom_time is None or now-self.odom_time>.3:self.stationary_since=None
         self.odom_time=now
@@ -81,13 +86,16 @@ class MissionServer(Node):
             except Exception as e:self.report('heartbeat_failed',str(e),goal_id)
     def feedback(self,handle):
         pose=self.pose
-        self.get_logger().info(f"pose: {pose} 포즈 들어 왔어요")
-        print(f"pose: {pose}")
+        now=time.monotonic()
+        if now-self.last_pose_log_at>=5.:
+            self.get_logger().debug(f'pose: {pose}')
+            self.last_pose_log_at=now
         if pose is None or time.monotonic()-pose[2]>1.:return
         f=Burger.Feedback();f.robot_x=float(pose[0]);f.robot_y=float(pose[1]);f.robot_theta=self.direction;f.message='IDLE';handle.publish_feedback(f)
     def execute(self,handle):
         command=handle.request.command;result=Burger.Result();result.success=False;result.message='ERROR'
         goal_id=bytes(handle.goal_id.uuid).hex();route=command in ROUTES;successful=False
+        recoverable_navigation_failure=False
         try:
             if command=='EMER_STOP':
                 self.backend.stop()
@@ -96,6 +104,9 @@ class MissionServer(Node):
                 if not self.stationary():raise RuntimeError('STOP_LATCHED_BUT_STATIONARY_NOT_CONFIRMED')
                 successful=True
             elif command=='RESTART':
+                # EMER_STOP처럼 최대 3초 동안 정지를 확인한다. 순간적인 odom 지연만으로 해제가 거부되지 않게 한다.
+                end=time.monotonic()+3.
+                while rclpy.ok() and time.monotonic()<end and not self.stationary():time.sleep(.05)
                 if not self.stationary():raise RuntimeError('FRESH_STATIONARY_ODOMETRY_REQUIRED')
                 self.backend.restart();successful=True
             else:
@@ -115,7 +126,11 @@ class MissionServer(Node):
                                     and proof.get('terminal_verified') is True
                                     and proof.get('terminal_mode') in ('dock','park','rest')
                                     and (proof.get('terminal_mode')=='rest' or proof.get('dock_verified') is True))
-                        if not successful:raise RuntimeError(record.get('error','MISSION_FAILED_OR_UNVERIFIED'))
+                        if not successful:
+                            recoverable_navigation_failure=(self.robot in ('M1','M2')
+                                and record.get('status')=='failed'
+                                and record.get('recoverable_navigation_failure') is True)
+                            raise RuntimeError(record.get('error','MISSION_FAILED_OR_UNVERIFIED'))
                         break
                     self.feedback(handle);time.sleep(.2)
                 if not successful:raise RuntimeError('MISSION_TIMEOUT_OR_SHUTDOWN')
@@ -126,7 +141,17 @@ class MissionServer(Node):
         except Exception as e:
             self.report('failed',str(e),goal_id)
             if route:
-                try:self.backend.stop('action_failed')
+                try:
+                    self.backend.stop('action_failed')
+                    # Retry exhaustion is still ERROR to the host. Allow a NEW command only
+                    # after stationary feedback; operator stop/cancel can never be cleared.
+                    if recoverable_navigation_failure and not handle.is_cancel_requested:
+                        end=time.monotonic()+5.
+                        while rclpy.ok() and time.monotonic()<end and not self.stationary():
+                            time.sleep(.05)
+                        if (rclpy.ok() and self.stationary() and not handle.is_cancel_requested
+                                and self.backend.release_failed_navigation(goal_id)):
+                            self.report('ready_after_navigation_failure','재시도 3회 소진; 정지 확인 후 새 명령 대기',goal_id)
                 except Exception as stop_error:self.report('stop_failed',str(stop_error),goal_id)
             if handle.is_active:handle.abort()
             return result

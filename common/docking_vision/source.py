@@ -56,7 +56,7 @@ class VideoSource:
 
 
 class RosSource:
-    def __init__(self, topic, compressed=False, observation_topic=None):
+    def __init__(self, topic, compressed=False, observation_topic=None, max_age_s=.5):
         import rclpy
         from rclpy.signals import SignalHandlerOptions
         from cv_bridge import CvBridge
@@ -69,6 +69,8 @@ class RosSource:
         self.latest = None
         self.error = None
         self.last_stamp = None
+        self.max_age_s = max_age_s
+        self.stale_frames = self.accepted_frames = 0
         # Let the CLI's KeyboardInterrupt/finally run before closing the ROS context.
         rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
         namespace = '/'+topic.strip('/').split('/')[0]
@@ -89,6 +91,11 @@ class RosSource:
         # controller heartbeat from a capture older than one already consumed.
         if stamp != (0, 0) and self.last_stamp is not None and stamp <= self.last_stamp:
             return
+        source_ns = stamp[0]*1_000_000_000+stamp[1]
+        age = (self.node.get_clock().now().nanoseconds-source_ns)/1e9
+        if source_ns <= 0 or not -.1 <= age <= self.max_age_s:
+            self.stale_frames += 1
+            return
         try:
             image = (self.bridge.compressed_imgmsg_to_cv2(msg, 'bgr8') if self.compressed
                      else self.bridge.imgmsg_to_cv2(msg, 'bgr8'))
@@ -96,6 +103,7 @@ class RosSource:
                                   'source_stamp': {'sec': stamp[0], 'nanosec': stamp[1]},
                                   'frame_id': msg.header.frame_id})
             self.last_stamp = stamp
+            self.accepted_frames += 1
         except Exception as exc:
             self.error = str(exc)
 

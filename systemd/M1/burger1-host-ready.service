@@ -1,0 +1,14 @@
+[Unit]
+Description=burger1 persistent host readiness (no motion goals)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /home/ubuntu/final_robot_ws/robot/burger1/navigation/start_host_ready.sh
+KillSignal=SIGINT
+TimeoutStopSec=8
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

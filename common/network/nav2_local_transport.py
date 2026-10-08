@@ -34,6 +34,16 @@ def enable_local_transport(path):
     for participant in root.findall(tag('participant')):
         rtps = participant.find(tag('rtps'))
         if rtps is None: raise ValueError('Participant RTPS configuration missing')
+        # Fragment outgoing ROS graph/control data before IP; incoming legacy size stays accepted.
+        policy = rtps.find(tag('propertiesPolicy'))
+        if policy is None: policy = ET.SubElement(rtps, tag('propertiesPolicy'))
+        properties = policy.find(tag('properties'))
+        if properties is None: properties = ET.SubElement(policy, tag('properties'))
+        found = any(item.findtext(tag('name')) == 'fastdds.max_message_size' for item in properties)
+        if not found:
+            item = ET.SubElement(properties, tag('property'))
+            ET.SubElement(item, tag('name')).text = 'fastdds.max_message_size'
+            ET.SubElement(item, tag('value')).text = '1400'
         transports = rtps.find(tag('userTransports'))
         if transports is None: raise ValueError('Participant user transports missing')
         for transport in list(transports):

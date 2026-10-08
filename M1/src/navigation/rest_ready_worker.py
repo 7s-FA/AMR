@@ -8,6 +8,11 @@ from waypoint_worker import forwarded_output,monitor_disconnect
 
 def signature(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
+
+def check_sources(state):
+    if signature(state['entry'])!=state['sha256'] or signature(state['config'])!=state['config_sha256']:
+        raise RuntimeError('REST code/config changed; restarting idle standby')
+
 def validate(request, now, config):
     issued=request.get('issued')
     if isinstance(issued,bool) or not isinstance(issued,(int,float)) or not 0<=now-issued<=2:
@@ -35,8 +40,8 @@ def execute(module, prepared, request, connection):
 
 
 def main():
-    started=time.monotonic();here=Path(__file__).resolve().parent
-    entry=here/'rest_forward.py';config=Path('/home/ubuntu/final_robot_camera_burger1/docking.yaml')
+    started=time.monotonic();here=Path(__file__).absolute().parent
+    entry=here/'rest_forward.py';config=Path((os.environ['AMR_CAMERA'] + '/docking.yaml'))
     import yaml
     cfg=yaml.safe_load(config.read_text())
     if cfg['cmd_topic']!='/burger1/cmd_vel_direct' or cfg['odom_topic']!='/burger1/odom':
@@ -79,8 +84,14 @@ def main():
         address.unlink(missing_ok=True);server.bind(str(address));os.chmod(address,0o600)
         server.listen(1);server.setblocking(False);meta.write_text(json.dumps(state))
         print('REST standby prepared: no GPIO or command publisher',flush=True)
+        next_source_check=0.
         while rclpy.ok() and not stopping:
             rclpy.spin_once(node,timeout_sec=.05)
+            # Execution is synchronous below: reload only between requests.
+            # Raising here runs cleanup and Restart=on-failure reloads settings.
+            if time.monotonic() >= next_source_check:
+                check_sources(state)
+                next_source_check=time.monotonic()+.5
             try:connection,_=server.accept()
             except BlockingIOError:continue
             with connection:
@@ -88,8 +99,7 @@ def main():
                 try:
                     request=json.loads(connection.makefile('rb').readline(16384))
                     validate(request,time.monotonic(),config)
-                    if signature(entry)!=state['sha256'] or signature(config)!=state['config_sha256']:
-                        raise RuntimeError('REST code/config changed; restart standby while idle')
+                    check_sources(state)
                     if request['op']=='probe':
                         reply={'type':'result','code':0,'owner':owner,'odom':odom,
                                'command_publishers':len(node.get_publishers_info_by_topic(cfg['cmd_topic'])),

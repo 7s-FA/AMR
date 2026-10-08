@@ -20,7 +20,7 @@ def prepare(context):
         if os.path.exists(generated):os.unlink(generated)
         return []
     return [RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])),
-        GroupAction([SetParameter('bond_timeout',10.0),PushROSNamespace(robot),IncludeLaunchDescription(
+        GroupAction([SetParameter('bond_timeout',30.0),PushROSNamespace(robot),IncludeLaunchDescription(
             PythonLaunchDescriptionSource(get_package_share_directory('nav2_bringup')+'/launch/localization_launch.py'),
             launch_arguments={'namespace':robot,'params_file':generated,'map':LaunchConfiguration('map'),
                               'use_sim_time':'false','autostart':'true','use_composition':'False','use_respawn':'False'}.items())])]

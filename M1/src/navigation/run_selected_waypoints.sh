@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Robot-side numbered routes; --dry-run only prints the selected route.
 set -eo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,18 +20,64 @@ trap cleanup EXIT
 python3 "$HERE/station_routes.py" "$ROOT/host_ws/src/waffle_navigation/config/waypoints_burger1.yaml" "$HERE/station_routes.yaml" "$SELECTION" "$TEMP"
 DEPARTURE_FLAG="$ROOT/data/burger1/departure_pending"
 WAYPOINT_ARGS=(--waypoints "$TEMP" --pre-backup-distance 0 --pre-turn-angle-deg 0 --final-yaw-tolerance-deg 3
-      --final-post-turn-xy-tolerance 0.06 --position-arrival-retries 1 --align-large-heading-before-navigation --prealign-heading-deg 100 --skip-intermediate-yaw)
+      --final-post-turn-xy-tolerance 0.06 --position-arrival-retries 1
+      --align-large-heading-before-navigation --prealign-heading-deg 100 --skip-intermediate-yaw)
+# Host routes retry a failed coordinate without repeating departure or completed legs.
+if [[ "${BURGER_COMMON_RETRY:-}" == 1 ]];then
+  # The mission policy owns the retry budget; do not multiply inner retries.
+  WAYPOINT_ARGS+=(--navigation-retries 0 --position-arrival-retries 0
+                  --route-progress "$BURGER_ROUTE_PROGRESS")
+  # Recovery alone retains stop-and-align; successful first attempts steer
+  # while moving. A checkpoint exists only after the previous route started.
+  if [[ -f "$BURGER_ROUTE_PROGRESS" ]];then
+    WAYPOINT_ARGS+=(--align-before-navigation)
+  fi
+elif [[ "${BURGER_REQUEST_SOURCE:-}" == host ]] || python3 - "$ROOT/data/burger1/action_gate.json" <<'GATE'
+import json,sys
+try:
+    gate=json.load(open(sys.argv[1]))
+    sys.exit(0 if gate.get('goal_id') and not gate.get('estop', True) else 1)
+except (OSError,ValueError,TypeError):
+    sys.exit(1)
+GATE
+then
+  WAYPOINT_ARGS+=(--navigation-retries 3)
+fi
 add_departure_args() {
   if [[ -f "$DEPARTURE_FLAG" ]]; then
-    DEPARTURE_SPEED=$(PYTHONPATH="$HERE" python3 - "$ROOT/data/$ROBOT/action_gate.json" <<'SPEED'
+    local flag_text
+    flag_text=$(< "$DEPARTURE_FLAG")
+    if [[ $flag_text == terminal_started_* ]]; then
+      echo '중단된 도킹 상태: 경로 출차 금지, 동일 목적지 도킹 재시작 필요' >&2
+      return 1
+    fi
+    DEPARTURE_VALUES=$(PYTHONPATH="$HERE" python3 - "$ROOT/data/$ROBOT/action_gate.json" <<'SPEED'
 import sys
 from action_gate import departure_speed
-print(departure_speed(sys.argv[1]))
+speed = departure_speed(sys.argv[1])
+print(speed, speed * 3.5)
 SPEED
 )
-    WAYPOINT_ARGS+=(--pre-backup-distance 0.15 --pre-backup-speed "$DEPARTURE_SPEED"
-           --pre-backup-open-loop --pre-turn-angle-deg 180)
-    echo '도킹/파킹/rest 후 첫 주행: 출차 후진·180도 회전 실행'
+    read -r DEPARTURE_SPEED DEPARTURE_DISTANCE <<< "$DEPARTURE_VALUES"
+    # 이전 출차가 중간에 실패했으면 남은 동작만 다시 한다. 출차가 끝나면 경로 코드가 표시를 치운다.
+    if [[ $flag_text == departure_backup_done* ]]; then
+      DEPARTURE_DISTANCE=0
+      echo '이전 출차에서 후진은 완료: 180도 회전부터 다시 실행'
+    elif [[ $flag_text == departure_backup_partial* ]]; then
+      local remaining
+      remaining=$(awk '{print $2}' <<< "$flag_text")
+      if [[ $remaining =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v r="$remaining" -v d="$DEPARTURE_DISTANCE" 'BEGIN{exit !(r > 0 && r <= d)}'; then
+        DEPARTURE_DISTANCE=$remaining
+        echo "이전 출차 후진이 덜 됨: 남은 ${remaining} m 후진·180도 회전 실행"
+      else
+        echo '이전 출차 기록 확인 불가: 전체 출차(후진·180도 회전) 실행'
+      fi
+    else
+      echo '도킹/파킹/rest 후 첫 주행: 엔코더 후진·180도 회전 실행'
+    fi
+    WAYPOINT_ARGS+=(--pre-backup-distance "$DEPARTURE_DISTANCE" --pre-backup-speed "$DEPARTURE_SPEED" --pre-backup-open-loop
+           --pre-turn-angle-deg 180
+           --departure-flag "$DEPARTURE_FLAG" --departure-consumed "$LOG_DIR/departure_consumed")
   else
     echo '출차 동작 생략: 바로 웨이포인트 주행'
   fi
@@ -88,10 +141,7 @@ if ! kill -0 "$RECORDER_PID" 2>/dev/null; then
   exit 1
 fi
 fi
-# Claim the one-shot departure only after readiness/recorder checks. Never
-# automatically repeat it after a failed or interrupted departure.
+# 출차 표시는 미리 치우지 않는다. 경로 코드가 후진 완료/부분 진행을 기록하고,
+# 후진·회전이 모두 끝난 순간에만 치운다. 실패하면 다음 명령이 남은 출차부터 한다.
 add_departure_args
-if [[ -f "$DEPARTURE_FLAG" ]]; then
-  mv -- "$DEPARTURE_FLAG" "$LOG_DIR/departure_consumed"
-fi
 bash "$HERE/run_waypoints.sh" "${WAYPOINT_ARGS[@]}" "$@" 2>&1 | tee "$LOG_DIR/waypoints.log"

@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Camera only: preserve optics/calibration; no GPIO or motion commands.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROBOT=burger1
-NAV="$HOME/final_robot_ws/robot/$ROBOT/navigation"
+NAV="${AMR_WORKSPACE}/robot/$ROBOT/navigation"
 PROFILE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$ROBOT-camera-profile"
 case "${1:-}" in active|idle) MODE=$1;;*) exit 2;;esac
 exec 6>"$PROFILE.lock"

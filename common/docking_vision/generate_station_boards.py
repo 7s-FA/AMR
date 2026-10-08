@@ -17,7 +17,7 @@ from .board import DockingBoard
 from .vision import MarkerFinder, make_marker
 
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).absolute().parents[4]
 STATIONS = [('burger1', 'BURGER 1', [4, 5, 6, 7]),
             ('burger2', 'BURGER 2', [8, 9, 10, 11])]
 PX_PER_MM = 10

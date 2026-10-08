@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).absolute().parents[1]
 spec = importlib.util.spec_from_file_location('save_start_pose', ROOT / 'scripts/save_start_pose.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

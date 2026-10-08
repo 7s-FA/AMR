@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Motor/odometry driver only; this does not start Nav2 or issue velocity commands.
 set -eo pipefail
 source /opt/ros/jazzy/setup.bash
-source "$HOME/turtlebot3_ws/install/setup.bash"
+if [[ -f "$HOME/turtlebot3_ws/install/setup.bash" ]]; then source "$HOME/turtlebot3_ws/install/setup.bash"; fi
 export ROS_DOMAIN_ID="${BURGER1_ROS_DOMAIN_ID:-40}"
 export TURTLEBOT3_MODEL=burger
 export LDS_MODEL="${LDS_MODEL:-LDS-02}"

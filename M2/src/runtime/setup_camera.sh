@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Run on burger2 (Pi 5, Ubuntu 24.04 / ROS Jazzy).
 # Install the Raspberry Pi fork in a private prefix, not /usr or /opt/ros.
 set -eo pipefail
-CAMERA_ROOT="${CAMERA_ROOT:-$HOME/final_robot_camera}"
+CAMERA_ROOT="${CAMERA_ROOT:-${AMR_CAMERA}}"
 LIBCAMERA_COMMIT=6c1dd9d55573010f710c9e190a73e7e76f0d9432
 CAMERA_ROS_COMMIT=f4023dc09cfc5fd36fedbb3656ad3a98733e297a
 source /opt/ros/jazzy/setup.bash

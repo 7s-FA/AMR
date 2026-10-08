@@ -10,7 +10,7 @@ import pytest
 import yaml
 from ament_index_python.packages import get_package_prefix
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).absolute().parents[1]
 spec = importlib.util.spec_from_file_location('nav2_waypoints', ROOT / 'scripts/nav2_waypoints.py')
 route = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(route)
@@ -159,25 +159,25 @@ POINTS = [{'x': -0.5, 'y': 0.0, 'yaw': 0.0, 'mode': 'reverse'},
 
 def test_namespaced_goals_and_odometry_reject_another_robot():
     nav = FakeNavigator()
-    nav.frame_prefix = 'burger2/'
-    assert route.make_goal_pose_list(nav, POINTS)[0].header.frame_id == 'burger2/map'
+    nav.frame_prefix = 'burger1/'
+    assert route.make_goal_pose_list(nav, POINTS)[0].header.frame_id == 'burger1/map'
     nav.odom_message = route.Odometry()
     nav.odom_message.pose.pose.orientation.w = 1.0
     nav.odom_received_at = route.time.monotonic()
     nav._fresh_stamp = lambda *args: True
-    nav.odom_message.header.frame_id = 'burger2/odom'
-    nav.odom_message.child_frame_id = 'burger2/base_footprint'
-    assert route.WaypointNavigator._departure_pose(nav) == (0.0, 0.0, 0.0)
     nav.odom_message.header.frame_id = 'burger1/odom'
+    nav.odom_message.child_frame_id = 'burger1/base_footprint'
+    assert route.WaypointNavigator._departure_pose(nav) == (0.0, 0.0, 0.0)
+    nav.odom_message.header.frame_id = 'burger2/odom'
     with pytest.raises(RuntimeError, match='좌표계'):
         route.WaypointNavigator._departure_pose(nav)
 
 
 def test_other_robot_actions_do_not_block_namespaced_departure():
-    assert route.action_in_namespace('/burger2/navigate_to_pose/_action/status', '/burger2')
-    assert not route.action_in_namespace('/burger1/navigate_to_pose/_action/status', '/burger2')
-    assert not route.action_in_namespace('/burger20/navigate_to_pose/_action/status', '/burger2')
-    assert not route.action_in_namespace('/navigate_to_pose/_action/status', '/burger2')
+    assert route.action_in_namespace('/burger1/navigate_to_pose/_action/status', '/burger1')
+    assert not route.action_in_namespace('/burger2/navigate_to_pose/_action/status', '/burger1')
+    assert not route.action_in_namespace('/burger10/navigate_to_pose/_action/status', '/burger1')
+    assert not route.action_in_namespace('/navigate_to_pose/_action/status', '/burger1')
 
 
 def run(nav, timeout=300):
@@ -513,7 +513,7 @@ def test_departure_handles_clear_infinite_returns():
     route.check_rear_scan(scan, -0.032, 0, 0)
 
 
-@pytest.mark.parametrize('fault', [None, 'scan_stale', 'odom_stale', 'stuck', 'interrupt', 'active'])
+@pytest.mark.parametrize('fault', [None, 'scan_stale', 'encoder_stale', 'stuck', 'interrupt', 'active'])
 def test_departure_stops_on_all_exits(monkeypatch, fault):
     """Exercise the actual control loop, including stop publication and cleanup."""
     clock, commands, position = [0.0], [], [0.0]
@@ -528,7 +528,8 @@ def test_departure_stops_on_all_exits(monkeypatch, fault):
     destroyed = []
     nav.destroy_subscription = lambda sub: destroyed.append(sub)
     nav.wait_until_stopped = lambda timeout: True
-    nav._departure_pose = lambda: (position[0], 0.0, 0.0)
+    nav._encoder_settled = lambda: None
+    nav._encoder_counts = lambda: (round(position[0]/route.ENCODER_METRES_PER_TICK),)*2
     nav._check_departure_scan = lambda: None
     from builtin_interfaces.msg import Time
     nav.get_clock = lambda: SimpleNamespace(now=lambda: SimpleNamespace(to_msg=Time))
@@ -538,7 +539,7 @@ def test_departure_stops_on_all_exits(monkeypatch, fault):
     def spin(node, timeout_sec):
         clock[0] += 0.05
         if commands:
-            if fault in ('scan_stale', 'odom_stale'):
+            if fault in ('scan_stale', 'encoder_stale'):
                 raise RuntimeError(fault)
             if fault == 'interrupt':
                 raise KeyboardInterrupt()
@@ -552,7 +553,7 @@ def test_departure_stops_on_all_exits(monkeypatch, fault):
             route.WaypointNavigator.pre_backup(nav, 0.1, 0.05, 20)
     else:
         route.WaypointNavigator.pre_backup(nav, 0.1, 0.05, 20)
-        assert 0.1 <= -position[0] < 0.11
+        assert abs(-position[0]-0.1) <= 100*route.ENCODER_METRES_PER_TICK
     assert any(msg.twist.linear.x < 0 for msg in commands)
     assert all(-0.05 <= msg.twist.linear.x <= 0 and msg.twist.angular.z == 0 for msg in commands)
     assert all(msg.twist.linear.x == 0 for msg in commands[-10:])

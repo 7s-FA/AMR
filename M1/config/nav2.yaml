@@ -146,11 +146,11 @@ controller_server:
       debug_trajectory_details: true
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.108
+      max_vel_x: 0.1296
       max_vel_y: 0.0
-      max_vel_theta: 0.358891949
+      max_vel_theta: 0.4306703388
       min_speed_xy: 0.0
-      max_speed_xy: 0.108
+      max_speed_xy: 0.1296
       min_speed_theta: 0.0
       acc_lim_x: 3.0
       acc_lim_y: 0.0
@@ -193,11 +193,11 @@ controller_server:
       debug_trajectory_details: false
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.057024
+      max_vel_x: 0.0684288
       max_vel_y: 0.0
-      max_vel_theta: 0.358891949
+      max_vel_theta: 0.4306703388
       min_speed_xy: 0.0
-      max_speed_xy: 0.057024
+      max_speed_xy: 0.0684288
       min_speed_theta: 0.0
       acc_lim_x: 0.396
       acc_lim_y: 0.0
@@ -225,6 +225,16 @@ controller_server:
       - GoalDist
       - Twirling
       waffle_navigation::PositionApproach.scale: 1000.0
+      waffle_navigation::PositionApproach.heading_guard_enabled: false
+      waffle_navigation::PositionApproach.continuous_steering_enabled: true
+      waffle_navigation::PositionApproach.heading_start_deg: 5.0
+      waffle_navigation::PositionApproach.heading_stop_deg: 12.0
+      waffle_navigation::PositionApproach.smooth_speed_enabled: true
+      waffle_navigation::PositionApproach.cruise_speed: 0.0684288
+      waffle_navigation::PositionApproach.approach_speed: 0.03
+      waffle_navigation::PositionApproach.arrival_radius: 0.03
+      waffle_navigation::PositionApproach.slowing_distance: 0.25
+      waffle_navigation::PositionApproach.near_rotational_limit: 0.4306703388
       BaseObstacle.scale: 0.02
       GoalAlign.scale: 0.0
       GoalAlign.forward_point_distance: 0.1
@@ -248,7 +258,6 @@ local_costmap:
       robot_radius: 0.1
       plugins:
       - obstacle_layer
-      - voxel_layer
       - inflation_layer
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
@@ -301,7 +310,6 @@ global_costmap:
       plugins:
       - static_layer
       - obstacle_layer
-      - voxel_layer
       - inflation_layer
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
@@ -375,12 +383,19 @@ behavior_server:
     cycle_frequency: 10.0
     behavior_plugins:
     - spin
+    - precision_spin
+    - departure_spin
     - backup
     - drive_on_heading
     - wait
     - assisted_teleop
     spin:
       plugin: nav2_behaviors::Spin
+    precision_spin:
+      plugin: waffle_navigation::PrecisionSpin
+    departure_spin:
+      plugin: waffle_navigation::DepartureSpin
+      max_rotational_vel: 0.775982592
     backup:
       plugin: nav2_behaviors::BackUp
     drive_on_heading:
@@ -394,7 +409,7 @@ behavior_server:
     robot_base_frame: burger1/base_link
     transform_timeout: 0.1
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.3592512
+    max_rotational_vel: 0.43110144
     min_rotational_vel: 0.0792
     rotational_acc_lim: 0.396
     enable_stamped_cmd_vel: true
@@ -510,24 +525,24 @@ velocity_smoother:
     scale_velocities: false
     feedback: OPEN_LOOP
     max_velocity:
-    - 0.06912
+    - 0.082944
     - 0.0
-    - 0.358891949
+    - 0.775982592
     min_velocity:
-    - -0.06912
+    - -0.082944
     - 0.0
-    - -0.358891949
+    - -0.775982592
     deadband_velocity:
     - 0.0
     - 0.0
     - 0.0
     velocity_timeout: 1.0
     max_accel:
-    - 0.396
+    - 0.12
     - 0.0
     - 0.66
     max_decel:
-    - -0.5544
+    - -0.24
     - 0.0
     - -0.88
     odom_topic: odom

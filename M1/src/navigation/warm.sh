@@ -1,17 +1,35 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 set -eo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROBOT=$(basename "$(dirname "$HERE")")
-CAMERA_ROOT=$HOME/final_robot_camera
-[[ "$ROBOT" != burger1 ]] || CAMERA_ROOT=/home/ubuntu/final_robot_camera_burger1
-if ! systemctl --user is-active --quiet "$ROBOT-base.service";then
+CAMERA_ROOT=${AMR_CAMERA}
+[[ "$ROBOT" != burger1 ]] || CAMERA_ROOT=${AMR_CAMERA}
+if [[ ! $(systemctl --user show "$ROBOT-base.service" -p ActiveState --value) =~ ^(active|activating|reloading)$ ]];then
  if pgrep -u "$USER" -f '[/]turtlebot3_ros|[/]ld08_driver|[b]ase.launch.py' >/dev/null;then
   echo '수동 본체 실행을 먼저 종료하세요.' >&2;exit 1
  fi
  systemctl --user reset-failed "$ROBOT-base.service" 2>/dev/null || true
- systemd-run --user --collect --unit="$ROBOT-base" --property=KillSignal=SIGINT --property=TimeoutStopSec=5 --setenv=ROS_DOMAIN_ID=40 /bin/bash "$CAMERA_ROOT/start_base.sh"
+ # Prefer deployed persistent units; creating a transient unit with the same name fails.
+ _service_fragment=$(systemctl --user show "$ROBOT-base.service" -p FragmentPath --value 2>/dev/null || true)
+ if [[ -n "$_service_fragment" ]]; then
+  systemctl --user start "$ROBOT-base.service"
+ else
+  systemd-run --user --collect --unit="$ROBOT-base" --property=KillSignal=SIGINT --property=TimeoutStopSec=5 --setenv=ROS_DOMAIN_ID=40 /bin/bash "$CAMERA_ROOT/start_base.sh"
+ fi
+ unset _service_fragment
 fi
-systemctl --user start "$ROBOT-motion-owner.service" "$ROBOT-localization.service"
+for _warm_unit in "$ROBOT-motion-owner.service" "$ROBOT-localization.service"; do
+ _warm_state=$(systemctl --user show "$_warm_unit" -p ActiveState --value)
+ case "$_warm_state" in active|activating|reloading) ;; deactivating) echo "$_warm_unit 종료 중" >&2;exit 1;; *) systemctl --user start "$_warm_unit";; esac
+done
+unset _warm_unit _warm_state
 
 exec 7>"${XDG_RUNTIME_DIR:-/tmp}/$ROBOT-localization-init-$UID.lock"
 flock -w 30 7
@@ -29,9 +47,12 @@ unset WARM_READY_ARGS
 flock -u 7
 exec 7>&-
 
+if [[ "${BURGER_PARALLEL_PREPARE:-}" != 1 ]]; then
 # Prepare ROS connections once; no goals or motor/GPIO commands.
 # Preparation failure uses the original per-route path.
 bash "$HERE/ensure_waypoint_ready.sh" || echo "웨이포인트 연결 사전 준비 실패: 기존 실행 경로 유지" >&2
 
 # REST standby retains feedback/graph connections; owns no GPIO or speed publisher.
 bash "$HERE/ensure_rest_ready.sh" || echo 'REST 사전 준비 실패: 기존 실행 경로 유지' >&2
+
+fi

@@ -1,0 +1,8 @@
+<library path="precision_spin_behavior">
+  <class type="waffle_navigation::PrecisionSpin" base_class_type="nav2_core::Behavior">
+    <description>Nav2 Spin with a slow final 15-degree speed envelope.</description>
+  </class>
+  <class type="waffle_navigation::DepartureSpin" base_class_type="nav2_core::Behavior">
+    <description>Collision-checked departure turn with its own speed ceiling and slow finish.</description>
+  </class>
+</library>

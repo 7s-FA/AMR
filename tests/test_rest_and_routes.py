@@ -83,7 +83,8 @@ def test_wrapper_only_sets_departure_flag_with_verified_stop(tmp_path,verified):
     controller.write_text("echo '"+json.dumps({'state':'RESTED','reason':'ir_high_and_stationary','stopped':verified,'ir_high':True})+"'\n")
     result=subprocess.run(['bash',str(nav/'terminal_wrapper.sh'),'rest',str(controller)],capture_output=True,text=True)
     assert (result.returncode==0)==verified
-    assert (tmp_path/'data/burger2/departure_pending').exists()==verified
+    flag=(tmp_path/'data/burger2/departure_pending').read_text()
+    assert flag.startswith('successful_rest' if verified else 'terminal_started_rest')
 
 
 def test_odom_age_includes_transport_delay():

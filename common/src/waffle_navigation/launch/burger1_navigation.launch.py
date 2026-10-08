@@ -5,12 +5,12 @@ import tempfile
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler, GroupAction
 from launch.conditions import IfCondition
 from launch.event_handlers import OnShutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from launch_ros.actions import Node, SetRemap
 
 
 def prepare(context):
@@ -25,6 +25,7 @@ def prepare(context):
     with open(source, encoding='utf-8') as stream:
         params = helper.merge_params(yaml.safe_load(stream), tuning)
     helper.validate_collision_frames(params)
+    params['collision_monitor']['ros__parameters']['cmd_vel_out_topic']='cmd_vel_nav_out'
     # 원본 설정은 덮어쓰지 않고 실행 종료 시 임시 파일만 정리한다.
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', prefix='burger1_nav2_',
                                      delete=False, encoding='utf-8') as stream:
@@ -39,14 +40,19 @@ def prepare(context):
     nav2 = get_package_share_directory('nav2_bringup')
     return [
         RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(nav2 + '/launch/bringup_launch.py'),
+        GroupAction([
+            # The bundled Nav2 docking server is not used by ArUco/IR docking.
+            # Its declared publisher must never share the real motor topic.
+            SetRemap(src='docking_server:cmd_vel',dst='cmd_vel_nav_unused'),
+            IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(share + '/launch/lean_bringup_launch.py'),
             launch_arguments={
                 'namespace': 'burger1', 'use_namespace': 'true',
+                'use_localization': 'False',
                 'map': LaunchConfiguration('map'),
                 'params_file': generated,
                 'use_sim_time': LaunchConfiguration('use_sim_time'),
-            }.items()),
+            }.items())]),
     ]
 
 

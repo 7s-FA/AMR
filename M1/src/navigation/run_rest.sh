@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 set -eo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-CAMERA_ROOT=/home/ubuntu/final_robot_camera_burger1
+CAMERA_ROOT=${AMR_CAMERA}
 if [[ "${1:-}" == --check ]]; then
   exec python3 "$HERE/rest_forward.py" --config "$CAMERA_ROOT/docking.yaml" --check
 fi
@@ -15,7 +22,7 @@ BURGER_PREPARED_SOCKET_NAME=burger1-rest-ready.sock /usr/bin/python3 "$HERE/wayp
 # Only 2 (no request sent) permits the original cold execution. Never duplicate an accepted move.
 if (( status != 2 )); then exit "$status"; fi
 source /opt/ros/jazzy/setup.bash
-source "$HOME/turtlebot3_ws/install/setup.bash"
+if [[ -f "$HOME/turtlebot3_ws/install/setup.bash" ]]; then source "$HOME/turtlebot3_ws/install/setup.bash"; fi
 bash "$HERE/warm.sh"
 export ROS_DOMAIN_ID=40 RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 python3 "$CAMERA_ROOT/docking_network.py" --config "$CAMERA_ROOT/docking.yaml" --role robot --output "$HERE/dds_rest.xml"

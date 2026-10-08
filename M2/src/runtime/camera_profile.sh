@@ -1,22 +1,57 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Camera only: preserve optics/calibration; no GPIO or motion commands.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROBOT=burger2
-NAV="$HOME/final_robot_ws/robot/$ROBOT/navigation"
 PROFILE="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/$ROBOT-camera-profile"
 case "${1:-}" in active|idle) MODE=$1;;*) exit 2;;esac
 exec 6>"$PROFILE.lock"
 flock -w 10 6
-OLD=$(cat "$PROFILE" 2>/dev/null || echo idle)
-if [[ ! -r "$PROFILE" || "$OLD" != "$MODE" ]];then
- printf '%s
-' "$MODE" > "$PROFILE.tmp";mv "$PROFILE.tmp" "$PROFILE"
- if systemctl --user is-active --quiet "$ROBOT-camera.service";then
-  # Dynamic libcamera controls preserve the capture process and image connection.
-  if ! /usr/bin/python3 "$HERE/docking_warm_client.py" "$ROBOT" --profile "$MODE";then
-    systemctl --user restart "$ROBOT-camera.service"
-  fi
- fi
+# Native control is independent of docking standby configuration.
+apply_profile() {
+ /usr/bin/python3 - "$HERE" "$ROBOT" "$MODE" <<'PY'
+import json, sys, time
+sys.path.insert(0, sys.argv[1])
+from camera_ipc import profile
+robot, mode = sys.argv[2:4]
+for attempt in range(3):
+    try:
+        report = profile(robot, mode, timeout=2.)
+    except (OSError, RuntimeError) as exc:
+        if isinstance(exc, RuntimeError) and str(exc) != 'Camera control disconnected':
+            print('Camera profile rejected: ' + str(exc), file=sys.stderr)
+            sys.exit(3)
+        print(f'Camera control attempt {attempt+1}/3 failed: {exc}', file=sys.stderr)
+        if attempt == 2:
+            sys.exit(2)
+        time.sleep(.2)
+        continue
+    except Exception as exc:
+        print('Camera profile rejected: ' + str(exc), file=sys.stderr)
+        sys.exit(3)
+    if report.get('camera_profile') != mode or report.get('frame_duration_us') != (66667 if mode == 'active' else 500000):
+        print('Camera profile acknowledgement mismatch: ' + str(report), file=sys.stderr)
+        sys.exit(3)
+    print(json.dumps(report), flush=True)
+    break
+PY
+}
+systemctl --user start "$ROBOT-camera.service"
+status=0
+apply_profile || status=$?
+if (( status == 2 )); then
+ echo 'Camera control unavailable; restarting once and reapplying profile.' >&2
+ systemctl --user restart "$ROBOT-camera.service"
+ apply_profile
+elif (( status != 0 )); then
+ exit "$status"
 fi
-bash "$NAV/ensure_camera.sh"
+# Always request the actual mode, even if the local record already matches.
+printf '%s\n' "$MODE" > "$PROFILE.tmp";mv "$PROFILE.tmp" "$PROFILE"
