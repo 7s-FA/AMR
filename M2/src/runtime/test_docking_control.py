@@ -66,6 +66,32 @@ def test_loss_before_alignment_never_enters_blind_approach():
     assert c.state == 'ALIGN'
 
 
+def test_parking_30cm_alignment_then_straight_until_ir():
+    c = DockingControl(Settings(staging_distance_m=.30,
+                               lateral_tolerance_m=.001, yaw_tolerance_deg=1.))
+    inputs(c, 0., o=observation(z=.31))
+    assert c.start(0.)[0]
+    # A visible board with incorrect alignment must not latch straight motion.
+    for i in range(1, 91):
+        inputs(c, i*.01, o=observation(x=.01, z=.31, yaw=.1))
+        c.tick(i*.01)
+        assert c.state == 'ALIGN'
+    for i in range(91, 181):
+        inputs(c, i*.01, o=observation(z=.31))
+        c.tick(i*.01)
+    assert c.state == 'FINAL_APPROACH'
+    invalid = observation(z=.27, valid=False)
+    invalid['reason'] = 'board_geometry_inconsistent'
+    inputs(c, 1.9, o=invalid)
+    assert c.tick(1.9) == (.03, 0.)
+    inputs(c, 2., high=True, o=invalid)
+    assert c.tick(2.) == (0., 0.) and c.state == 'STOPPING'
+    for i in range(201, 261):
+        inputs(c, i*.01, o=invalid)
+        assert c.tick(i*.01) == (0., 0.)
+    assert c.state == 'DOCKED'
+
+
 def test_alignment_hold_must_be_continuous_and_stationary():
     c = DockingControl()
     inputs(c, 0)

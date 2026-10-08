@@ -30,7 +30,7 @@ def command_id(value):
 
 class Operation:
     def __init__(self, here, run=subprocess.run):
-        self.here = Path(here).resolve()
+        self.here = Path(here).absolute()
         self.robot = self.here.parent.name
         if self.robot not in ('burger1', 'burger2'):
             raise ValueError('로봇 navigation 폴더에서 실행해야 합니다.')
@@ -58,11 +58,12 @@ class Operation:
             raise RuntimeError('서비스 상태를 확인할 수 없습니다: ' + unit)
         return state not in ('inactive', 'failed')
 
-    def busy(self):
+    def busy(self, include_preparation=True):
         if any(self.active(u) for u in ('mission', 'docking', 'rest')):
             return True
         runtime = Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp'))
-        for kind in ('mission', 'motion'):
+        kinds = ('mission', 'motion', 'prepare') if include_preparation else ('mission', 'motion')
+        for kind in kinds:
             with (runtime / f'{self.robot}-{kind}-{os.getuid()}.lock').open('a') as f:
                 try:
                     fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -143,13 +144,22 @@ class Operation:
         return {'robot': self.robot, 'mode': self.mode(), 'task': task, 'busy': self.busy()}
 
     def parked(self):
-        if self.mode() != 'individual':
-            raise RuntimeError('주차 초기 위치 확인은 개별 모드에서만 가능합니다.')
-        if self.busy():
-            raise RuntimeError('이동 중에는 초기 위치를 바꿀 수 없습니다.')
-        r = self.run(['/bin/bash', str(self.here / 'confirm_parked.sh')], capture_output=True, text=True)
-        if r.returncode:
-            raise RuntimeError('주차 초기 위치 확인 실패:\n' + (r.stdout + r.stderr)[-5000:])
+        runtime = Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp'))
+        with (runtime / f'{self.robot}-prepare-{os.getuid()}.lock').open('a') as preparation:
+            try:
+                fcntl.flock(preparation, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise RuntimeError('다른 준비 명령 실행 중입니다.')
+            with self.lock():
+                if self.mode() != 'individual':
+                    raise RuntimeError('주차 초기 위치 확인은 개별 모드에서만 가능합니다.')
+                if self.busy(include_preparation=False):
+                    raise RuntimeError('이동 중에는 초기 위치를 바꿀 수 없습니다.')
+            # Admission stays reserved, but a localization recovery may take operation.lock.
+            r = self.run(['/bin/bash', str(self.here / 'confirm_parked.sh'), str(preparation.fileno())],
+                         pass_fds=(preparation.fileno(),), capture_output=True, text=True)
+            if r.returncode:
+                raise RuntimeError('주차 초기 위치 확인 실패:\n' + (r.stdout + r.stderr)[-5000:])
         return {'robot': self.robot, 'mode': self.mode(), 'localization_ready': True,
                 'departure_pending': True, 'motion_sent': False, 'detail': r.stdout.strip()}
 
@@ -178,23 +188,24 @@ def main():
     args = parser.parse_args()
     try:
         op = Operation(Path(__file__).parent)
-        with op.lock():
-            if args.action == 'mode':
-                result = op.set_mode(args.mode) if args.mode else {'robot': op.robot, 'mode': op.mode()}
-            elif args.action == 'submit':
-                if args.source == 'host' and not args.command_id:
-                    raise ValueError('공정 명령에는 --command-id가 필요합니다.')
-                result = op.submit(args.destination, args.source, args.command_id)
-            elif args.action == 'stop':
-                result = op.stop()
-            elif args.action == 'parked':
-                result = op.parked()
-            elif args.action == 'ready':
-                result = op.ready()
-            else:
-                current = op.current()
-                task = op.read('commands/' + command_id(args.command_id) + '.json') if args.command_id else current
-                result = {'robot': op.robot, 'mode': op.mode(), 'busy': op.busy(), 'task': task}
+        # Preparation owns its own lock and performs admission under operation.lock.
+        # Do not retain this parent lock while the child checks recovery admission.
+        if args.action in ('ready', 'parked'):
+            result = op.ready() if args.action == 'ready' else op.parked()
+        else:
+            with op.lock():
+                if args.action == 'mode':
+                    result = op.set_mode(args.mode) if args.mode else {'robot': op.robot, 'mode': op.mode()}
+                elif args.action == 'submit':
+                    if args.source == 'host' and not args.command_id:
+                        raise ValueError('공정 명령에는 --command-id가 필요합니다.')
+                    result = op.submit(args.destination, args.source, args.command_id)
+                elif args.action == 'stop':
+                    result = op.stop()
+                else:
+                    current = op.current()
+                    task = op.read('commands/' + command_id(args.command_id) + '.json') if args.command_id else current
+                    result = {'robot': op.robot, 'mode': op.mode(), 'busy': op.busy(), 'task': task}
         print(json.dumps(result, ensure_ascii=False))
         return 0
     except Exception as e:

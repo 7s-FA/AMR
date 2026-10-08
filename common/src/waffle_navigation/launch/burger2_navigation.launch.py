@@ -45,7 +45,7 @@ def prepare(context):
             # Its declared publisher must never share the real motor topic.
             SetRemap(src='docking_server:cmd_vel',dst='cmd_vel_nav_unused'),
             IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(nav2 + '/launch/bringup_launch.py'),
+            PythonLaunchDescriptionSource(share + '/launch/lean_bringup_launch.py'),
             launch_arguments={
                 'namespace': 'burger2', 'use_namespace': 'true',
                 'use_localization': 'False',

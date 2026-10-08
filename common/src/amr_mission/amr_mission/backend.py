@@ -11,7 +11,7 @@ def validate(command,speed):
 
 class Backend:
     def __init__(self,nav):
-        self.nav=Path(nav).resolve();sys.path.insert(0,str(self.nav))
+        self.nav=Path(nav).absolute();sys.path.insert(0,str(self.nav))
         from operation import Operation, atomic_json
         from action_gate import load_gate
         self.atomic=atomic_json;self.load_gate=load_gate
@@ -63,8 +63,26 @@ class Backend:
             return self.op.read('commands/'+goal_id+'.json')
     def stop(self,reason='emergency_stop'):
         # Write zero-output latch before potentially slow systemd stop calls.
-        with self.op.lock():self.atomic(self.path,{'estop':True,'reason':reason})
+        with self.op.lock():
+            previous=self.load_gate(self.path)
+            # Cleanup of a failed route must not overwrite an operator's emergency stop.
+            if reason!='action_failed' or not (previous and previous.get('estop',True)):
+                gate={'estop':True,'reason':reason}
+                if reason=='action_failed' and previous:
+                    gate['failed_goal_id']=previous.get('goal_id')
+                self.atomic(self.path,gate)
         return self.op.stop()
+    def release_failed_navigation(self,goal_id):
+        """Caller has confirmed stationary odom; release this failure, never an estop."""
+        with self.op.lock():
+            gate=self.load_gate(self.path)
+            if (self.op.robot not in ('burger1','burger2') or not gate or gate.get('reason')!='action_failed'
+                    or gate.get('failed_goal_id')!=goal_id or not gate.get('estop',False)
+                    or self.op.mode()!='process' or self.op.busy()):
+                return False
+            self.atomic(self.path,{'estop':False,'goal_id':None,
+                                   'reason':'navigation_failed_ready_for_new_command'})
+            return True
     def restart(self):
         with self.op.lock():
             if self.op.busy():raise RuntimeError('ROBOT_BUSY')

@@ -10,7 +10,7 @@ def signature(cfg_path, configurations):
         paths.update((Path(cfg['board_path']), Path(cfg['calibration_path'])))
     paths.update(Path(cfg_path).parent / name for name in
                  ('docking_node.py', 'docking_control.py', 'docking_vision_worker.py',
-                  'communication_guard.py', 'docking_vision/source.py'))
+                  'communication_guard.py', 'camera_ipc.py', 'video_http.py'))
     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
 
 
@@ -60,8 +60,7 @@ def main():
     from rclpy.node import Node
     from rclpy.signals import SignalHandlerOptions
     from std_msgs.msg import String
-    from rcl_interfaces.srv import SetParameters
-    from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
+    from camera_ipc import profile as native_camera_profile
     from docking_vision.docking_config import load_docking_config
     from docking_vision_worker import LocalVision
     from docking_node import DockingNode, Settings
@@ -84,20 +83,12 @@ def main():
         probe=Node('docking_standby_probe', namespace='/'+a.robot)
         def mode(m): owner.update(mode=m.data, at=time.monotonic())
         probe.create_subscription(String, 'motion_owner/status', mode, 1)
-        camera_client=probe.create_client(SetParameters, '/'+a.robot+'/camera/set_parameters')
         def profile(value):
             if value not in ('active', 'idle'): raise ValueError('Invalid camera profile')
-            if not camera_client.wait_for_service(timeout_sec=1.5):
-                raise RuntimeError('Camera parameter service unavailable')
-            duration = 500000 if value == 'idle' else (50000 if a.robot == 'burger1' else 66667)
-            parameter=Parameter(name='FrameDurationLimits', value=ParameterValue(
-                type=ParameterType.PARAMETER_INTEGER_ARRAY, integer_array_value=[duration, duration]))
-            future=camera_client.call_async(SetParameters.Request(parameters=[parameter]))
-            rclpy.spin_until_future_complete(probe, future, timeout_sec=2.0)
-            result=future.result() if future.done() else None
-            if result is None or len(result.results) != 1 or not result.results[0].successful:
-                raise RuntimeError('Camera rate change rejected: '+str(result))
-            return {'camera_profile': value, 'frame_duration_us': duration, 'restart': False}
+            report=native_camera_profile(a.robot,value)
+            expected=500000 if value=='idle' else 66667
+            if report['frame_duration_us']!=expected:raise RuntimeError('Native camera profile rejected')
+            return dict(report,restart=False)
         guard=GraphGuard(configurations['normal']['cmd_topic'], 'docking_controller', '/'+a.robot, 'docking')
         vision=LocalVision(configurations['normal'], modes=configurations);vision.set_active(False)
         server=socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -166,6 +157,7 @@ def main():
                         if node.control.state in ('DOCKED', 'STOPPED', 'FAULT'): break
                     code=0 if node.control.state == 'DOCKED' else 1
                     report={'state': node.control.state, 'reason': node.control.reason,
+                            'docking_encoder': node.encoder_retry_report(),
                             'warm_start': True, 'docking_mode': selected, 'target_ids': cfg['target_ids']}
                     exit_reason=node.control.state+': '+node.control.reason
                     conn.settimeout(1.);conn.sendall((json.dumps({'code': code, 'report': report})+'\n').encode())

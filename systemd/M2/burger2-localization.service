@@ -3,7 +3,7 @@ Description=burger2 persistent localization
 
 [Service]
 Type=simple
-ExecStart=/bin/bash %h/final_robot_ws/robot/burger2/navigation/launch_localization.sh
+ExecStart=/bin/bash /home/ubuntu/final_robot_ws/robot/burger2/navigation/launch_localization.sh
 KillSignal=SIGINT
 TimeoutStopSec=20
 Restart=no

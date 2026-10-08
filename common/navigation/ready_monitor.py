@@ -23,7 +23,7 @@ def main():
   except ValueError:pass
  n.create_subscription(String,'docking/status',docking,10)
  n.create_subscription(Bool,'ir/high',lambda m:ir.update(value='HIGH' if m.data else 'LOW',at=time.monotonic()),10)
- root=Path(__file__).resolve().parents[3];count=0;due=time.monotonic()
+ root=Path(__file__).absolute().parents[3];count=0;due=time.monotonic()
  print('1초 상태 표시 시작. Ctrl+C는 표시만 종료합니다. 로봇 정지: b'+a.robot[-1]+'_stop',flush=True)
  try:
   while rclpy.ok():

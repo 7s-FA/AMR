@@ -1,5 +1,6 @@
 """Regression checks for the shared normal-docking policy imported from M1."""
 import importlib.util
+from dataclasses import asdict, replace
 import math
 from pathlib import Path
 import sys
@@ -59,9 +60,97 @@ def test_shared_controller_stops_immediately_on_stale_vision_or_ir(robot):
     assert c.tick(.61) == (0., 0.) and c.state == 'STOPPED'
 
 
-@pytest.mark.parametrize('robot,align,final,turn', [('M1', .0351, .02808, .234), ('M2', .04212, .033696, .2808)])
-def test_parking_retains_onboard_profile_limits(robot, align, final, turn):
+@pytest.mark.parametrize('robot', ['M1', 'M2'])
+def test_parking_retains_snapshot_profile_limits(robot):
     c = make_controller(robot, 'parking')
-    assert not c.cfg.board_normal_tracking and not c.cfg.inverse_yaw_speed
-    assert c.cfg.align_speed_mps == align and c.cfg.final_speed_mps == final
-    assert c.cfg.max_angular_rps == turn and c.cfg.angular_speed_scale == 1.
+    assert not hasattr(c.cfg, 'board_normal_tracking')
+    assert not hasattr(c.cfg, 'inverse_yaw_speed')
+    assert c.cfg.align_speed_mps == .0351 and c.cfg.final_speed_mps == .02808
+    assert c.cfg.max_angular_rps == .234 and c.cfg.angular_speed_scale == 1.
+
+
+@pytest.mark.parametrize('robot', ['M1', 'M2'])
+def test_normal_matches_parking_except_staging_distance(robot):
+    normal = asdict(make_controller(robot).cfg)
+    parking = asdict(make_controller(robot, 'parking').cfg)
+    assert normal.pop('staging_distance_m') == .25
+    assert parking.pop('staging_distance_m') == .30
+    assert normal == parking
+
+
+@pytest.mark.parametrize('robot', ['M1', 'M2'])
+@pytest.mark.parametrize('lateral,yaw,distance', [(0., 0., .26), (.02, 5., .5),
+                                               (-.02, -5., .5), (.03, 20., .3),
+                                               (.007, 4., .163)])
+def test_normal_commands_match_parking_with_25cm_target(robot,lateral,yaw,distance):
+    normal = make_controller(robot)
+    parking = make_controller(robot, 'parking')
+    parking.cfg = replace(parking.cfg, staging_distance_m=.25)
+    for c in (normal, parking):
+        observe(c, 0., lateral, yaw, distance)
+        assert c.start(0.)[0]
+    for tick in range(1, 51):
+        now = tick*.02
+        for c in (normal, parking):
+            observe(c, now, lateral, yaw, distance)
+        assert normal.tick(now) == parking.tick(now)
+        assert (normal.state, normal.reason) == (parking.state, parking.reason)
+
+
+@pytest.mark.parametrize('robot', ['M1', 'M2'])
+@pytest.mark.parametrize('sign', [-1., 1.])
+def test_pd_damps_rotation_toward_target(robot,sign):
+    c = make_controller(robot)
+    assert c.cfg.angular_kd == .3
+    c.set_odom(0.,0.,0.,0.,sign*.1,0.)
+    assert c.turn(sign*.12,settling=True) == pytest.approx(sign*.09)
+    c.set_odom(0.,0.,0.,0.,-sign*.1,1.)
+    assert c.turn(sign*.12,settling=True) == pytest.approx(sign*.15)
+
+
+def test_pd_filters_samples_and_resets_after_odom_gap():
+    c = make_controller('M1')
+    c.set_odom(0.,0.,0.,0.,0.,0.)
+    c.set_odom(0.,0.,0.,0.,.2,.1)
+    assert c.filtered_angular == pytest.approx(.1)
+    c.set_odom(0.,0.,0.,0.,-.2,1.)
+    assert c.filtered_angular == pytest.approx(-.2)
+
+
+@pytest.mark.parametrize('robot', ['M1', 'M2'])
+def test_pd_never_overrides_stale_odom_stop_or_final_straight(robot):
+    c = make_controller(robot)
+    observe(c,0.);assert c.start(0.)[0]
+    c.set_odom(0.,0.,0.,0.,.2,.01)
+    c.state='FINAL_APPROACH';c.final_at=.01
+    assert c.tick(.02)==(c.cfg.final_speed_mps,0.)
+    c.set_ir(False,.4)
+    c.set_observation(c.observation,.4)
+    assert c.tick(.4)==(0.,0.)
+    assert c.state=='ODOM_WAIT'
+
+
+@pytest.mark.parametrize('value', [-1.,float('nan'),float('inf'),True])
+def test_invalid_pd_gain_rejected(value):
+    with pytest.raises(ValueError):
+        control.Settings(angular_kd=value)
+
+
+@pytest.mark.parametrize('robot', ['M1', 'M2'])
+def test_pd_integrated_alignment_and_ir_stop(robot):
+    pd = make_controller(robot)
+    p = make_controller(robot)
+    p.cfg = replace(p.cfg, angular_kd=0.)
+    for c in (pd,p):
+        # Board-normal pose near staging selects stationary heading alignment.
+        theta = math.radians(5.)
+        observe(c,0.,lateral=-.25*math.tan(theta),yaw=-5.,distance=.25)
+        assert c.start(0.)[0]
+        c.set_odom(0.,0.,0.,0.,.1,.01)
+    _, p_rate = p.tick(.02)
+    _, pd_rate = pd.tick(.02)
+    assert pd.reason == p.reason == 'near_stage_heading_alignment'
+    assert 0 < pd_rate < p_rate
+    pd.set_ir(True,.03)
+    assert pd.tick(.03) == (0.,0.)
+    assert pd.state == 'STOPPED'

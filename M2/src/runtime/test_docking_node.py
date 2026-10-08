@@ -29,6 +29,24 @@ class FakeGPIO:
         return self.value
 
 
+def test_diagnostics_record_control_and_freshness_without_motion_changes(rig, tmp_path):
+    from docking_recorder import DockingRecorder
+    node, _, _, _, pump, _ = rig
+    recorder = DockingRecorder(tmp_path, node.cfg)
+    node.recorder = recorder
+    try:
+        pump(.3)
+    finally:
+        node.recorder = None
+        recorder.close('test')
+    events = [json.loads(line) for line in (tmp_path / 'events.jsonl').read_text().splitlines()]
+    assert {'status', 'command', 'observation'} <= {e['kind'] for e in events}
+    status = next(e for e in events if e['kind'] == 'status')
+    assert status['observation_age_now_s'] is not None
+    assert status['odom_angular_rps'] == 0.
+    assert status['log_writer_error'] is None
+
+
 @pytest.fixture
 def rig(request):
     config = load_docking_config(Path(__file__).with_name('docking.yaml'),
@@ -57,7 +75,8 @@ def rig(request):
     def frame(valid=True, age=0.):
         ns = io.get_clock().now().nanoseconds-int(age*1e9)
         return {'status': 'ok', 'mode': 'four_marker_board', 'board_spec': config['board_spec'],
-                'frame_id': config['camera_frame'], 'image_width': 640, 'image_height': 480,
+                'frame_id': config['camera_frame'],
+                'image_width': config['vision']['image_width'], 'image_height': config['vision']['image_height'],
                 'source_stamp': {'sec': ns//10**9, 'nanosec': ns % 10**9},
                 'pose_valid': valid, 'detected_ids': config['target_ids'] if valid else [],
                 'tvec_m': [0., 0., .25] if valid else None,

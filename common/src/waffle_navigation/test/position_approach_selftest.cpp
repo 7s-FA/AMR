@@ -55,4 +55,42 @@ int main() {
       check(done,"Position rollout did not arrive");++count;
     }
   std::cout<<"PositionApproach: plugin, recorded miss, yaw independence, speed floor, 12 ideal rollouts PASS\n";
+  PositionApproach smooth;smooth.heading_guard_enabled=true;smooth.smooth_speed_enabled=true;
+  const Pose destination{0,0,0};
+  smooth.prepare({-.2,0,20*3.141592653589793/180},destination,.05,0);
+  check(smooth.heading_hold,"Heading error must latch stop");
+  check(smooth.allowed(0,0),"Braking command must remain available");
+  check(!smooth.allowed(0,-.2),"Must not pivot while measured translation persists");
+  check(!smooth.allowed(.03,-.1),"Must not drive an arc during heading recovery");
+  smooth.prepare({-.2,0,10*3.141592653589793/180},destination,0,0);
+  check(smooth.heading_hold && smooth.allowed(0,-.2),"Latch must persist until 5 degrees");
+  smooth.prepare({-.2,0,4*3.141592653589793/180},destination,0,-.2);
+  check(smooth.heading_hold && smooth.allowed(0,0),"Must stop residual rotation before release");
+  check(!smooth.allowed(.03,0),"Rotation still moving must inhibit translation");
+  smooth.prepare({-.2,0,4*3.141592653589793/180},destination,0,0);
+  check(!smooth.heading_hold && smooth.allowed(.03,0),"Aligned and stationary must release");
+  smooth.prepare({-.2,0,11*3.141592653589793/180},destination,0,0);
+  check(!smooth.heading_hold,"5/12 degree hysteresis must prevent toggling");
+  double previous=0;
+  for (int i=0;i<=200;++i) {
+    smooth.prepare({-i*.001,0,0},destination);
+    const double cap=smooth.speed_cap();
+    check(cap>=previous-1e-12 && cap<=smooth.cruise_speed+1e-12,"Speed cap must taper monotonically");
+    check(cap>=.03-1e-12,"Slow cap must retain effective DWB velocity samples");
+    previous=cap;
+  }
+  smooth.prepare({-.035,0,0},destination);
+  check(!smooth.allowed(.0684288,0) && smooth.allowed(.02737152,0),"Near goal must slow without grid stall");
+  std::cout<<"Burger1 heading hysteresis, stop-before-pivot/release, smooth approach and speed grid PASS\n";
+  PositionApproach flowing;flowing.smooth_speed_enabled=true;
+  flowing.continuous_steering_enabled=true;flowing.near_rotational_limit=.252;
+  flowing.prepare({-.12,0,60*3.141592653589793/180},destination,.03,-.1);
+  check(!flowing.heading_hold && flowing.allowed(.02737152,-.2),
+        "Continuous 60-degree approach must allow a correcting arc without a stop latch");
+  check(flowing.speed_cap()<flowing.cruise_speed,"Curved approach must reduce translation speed");
+  flowing.prepare({-.12,0,90*3.141592653589793/180},destination);
+  check(!flowing.allowed(.02737152,-.2),"Near sideways goal must retain pivot option");
+  flowing.prepare({-.3,0,20*3.141592653589793/180},destination,.04,-.1);
+  check(!flowing.heading_hold && flowing.allowed(.04,-.1),"Small errors must steer while translating");
+  std::cout<<"Continuous steering, corner arc, angle-dependent taper and behind-goal guard PASS\n";
 }

@@ -14,7 +14,7 @@ def main():
     parser.add_argument('robot', choices=('burger1', 'burger2'))
     parser.add_argument('mode', choices=('prepare', 'nav', 'direct', 'idle'))
     args = parser.parse_args()
-    here = Path(__file__).resolve().parent
+    here = Path(__file__).absolute().parent
     unit = args.robot+'-nav-control.service'
     address = str(Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp'))/(args.robot+'-nav-control.sock'))
     if subprocess.run(['systemctl', '--user', 'is-active', '--quiet', unit]).returncode != 0:

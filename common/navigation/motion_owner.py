@@ -22,6 +22,7 @@ def main():
     import rclpy
     from geometry_msgs.msg import TwistStamped
     from std_msgs.msg import String
+    from data_flow import EdgeHeartbeat
     from std_srvs.srv import Trigger
     rclpy.init(args=[]);node=rclpy.create_node('motion_owner',namespace='/'+a.robot)
     owner=CommandOwner();stopping=False
@@ -34,7 +35,7 @@ def main():
     communication_pub=node.create_publisher(String,'motion_owner/communication_status',1)
     from rclpy.qos import QoSProfile,DurabilityPolicy
     mission_pub=node.create_publisher(String,'mission/status',QoSProfile(depth=1,durability=DurabilityPolicy.TRANSIENT_LOCAL))
-    mission_file=Path(__file__).resolve().parents[3]/'data'/a.robot/'mission_state.json'
+    mission_file=Path(__file__).absolute().parents[3]/'data'/a.robot/'mission_state.json'
     from action_gate import gate_output
     gate_file=mission_file.with_name('action_gate.json')
     def send(v,w):
@@ -68,14 +69,22 @@ def main():
     node.create_subscription(TwistStamped,'cmd_vel_nav_out',input_cb('nav'),1)
     node.create_subscription(TwistStamped,'cmd_vel_direct',input_cb('direct'),1)
     node.create_timer(.02,lambda:send(*owner.output(time.monotonic())))
+    mission_gate = EdgeHeartbeat(1.)
+    communication_gate = EdgeHeartbeat(1.)
     def health():
         snapshot=guard.snapshot();error=snapshot['error']
-        communication_pub.publish(String(data=json.dumps({'mode':owner.mode, **snapshot})))
+        if communication_gate.due((owner.mode, error), time.monotonic()):
+            communication_pub.publish(String(data=json.dumps({'mode':owner.mode, **snapshot})))
         if error and owner.mode!='idle':
             owner.switch('idle');send(0.,0.);node.get_logger().error('모터 통신 감시 오류: '+error)
         status.publish(String(data=owner.mode))
         cached=mission_snapshot['data']
-        if cached is not None:mission_pub.publish(String(data=cached))
+        if cached is not None:
+            try:
+                record=json.loads(cached)
+                key=tuple(record.get(k) for k in ('command_id','stage','status','error'))
+            except (ValueError, TypeError):key=cached
+            if mission_gate.due(key,time.monotonic()):mission_pub.publish(String(data=cached))
     node.create_timer(.5,health)
     try:
         while rclpy.ok() and not stopping:rclpy.spin_once(node,timeout_sec=.1)

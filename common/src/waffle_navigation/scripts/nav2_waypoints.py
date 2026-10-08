@@ -3,6 +3,7 @@
 
 import argparse
 import importlib.util
+import json
 import math
 import os
 from pathlib import Path
@@ -13,14 +14,17 @@ from action_msgs.msg import GoalStatusArray
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from lifecycle_msgs.srv import GetState
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
+from nav2_msgs.action import Spin
 from nav_msgs.msg import Odometry, Path as NavPath
 import rclpy
+from rclpy.action import ActionClient
 from rcl_interfaces.srv import GetParameters
 from rclpy.qos import qos_profile_sensor_data, QoSProfile, DurabilityPolicy
 from rclpy.signals import SignalHandlerOptions
 from rclpy.utilities import remove_ros_args
 from tf2_ros import Buffer, TransformException, TransformListener
 from sensor_msgs.msg import LaserScan
+from turtlebot3_msgs.msg import SensorState
 import tf_transformations
 import yaml
 
@@ -30,6 +34,45 @@ CONTROLLERS = {'forward': 'FollowPositionForward', 'reverse': 'FollowPositionRev
 # route overrides this in waypoints.yaml. Pre-turn and final gates remain strict.
 INTERMEDIATE_XY_TOLERANCE = 0.10
 REAR_SCAN_RETRY_SECONDS = 0.5
+ENCODER_METRES_PER_TICK = 0.033 * 0.001533981
+ENCODER_TOLERANCE = 100
+# 출차 후진: 엔코더로 목표 거리를 채울 때까지 명령. 부하로 바퀴가 잠깐 서도 그만큼 더 간다.
+# 엔코더가 계속 안 와도 계산 시간 + 이 값(초)이 지나면 멈춘다.
+DEPARTURE_ENCODER_MARGIN_S = 2.0
+
+
+def departure_flag_write(path, text):
+    """출차 표시 파일이 있을 때만 진행 단계를 원자적으로 기록한다 (재시도 때 남은 동작만 하도록)."""
+    if not path:
+        return
+    flag = Path(path)
+    if not flag.exists():
+        return
+    temp = flag.with_name(flag.name + '.tmp')
+    temp.write_text(text + '\n')
+    temp.replace(flag)
+
+
+def departure_flag_consume(path, consumed=None):
+    """후진·회전이 모두 끝난 뒤에만 출차 표시를 치운다."""
+    if not path:
+        return
+    flag = Path(path)
+    if not flag.exists():
+        return
+    if consumed:
+        Path(consumed).parent.mkdir(parents=True, exist_ok=True)
+        flag.replace(consumed)
+    else:
+        flag.unlink()
+
+
+def encoder_delta(current, start):
+    return (current - start + 2**31) % 2**32 - 2**31
+
+
+def encoder_backup_counts(start, current):
+    return tuple(-encoder_delta(c, s) for s, c in zip(start, current))
 TERMINAL_APPROACH_DISTANCE = 0.10
 TERMINAL_MAX_DISTANCE = 0.15  # Reject a localization shift during the stop/turn.
 TERMINAL_SPEED = float(os.environ.get('BURGER_WAYPOINT_TERMINAL_SPEED', '0.03'))
@@ -201,6 +244,10 @@ class WaypointNavigator(BasicNavigator):
             NavPath, 'plan', self._on_plan, qos_profile_sensor_data)
         self.odom_subscription = self.create_subscription(
             Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
+        self.encoder_message = None
+        self.encoder_received_at = None
+        self.encoder_subscription = self.create_subscription(
+            SensorState, 'sensor_state', self._on_encoder, qos_profile_sensor_data)
         self.scan_subscription = self.create_subscription(
             LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
         self.tf_buffer = Buffer()
@@ -209,6 +256,51 @@ class WaypointNavigator(BasicNavigator):
         self.yaw_tolerance = 0.25
         self.arrival_tuning = {}
         self.intermediate_xy_tolerance = INTERMEDIATE_XY_TOLERANCE
+        self.precision_spin_client = ActionClient(self, Spin, 'precision_spin')
+        self.departure_spin_client = ActionClient(self, Spin, 'departure_spin')
+
+    def departure_spin(self, angle, allowance):
+        """One-shot dock/park/rest exit, with a separate collision-checked ceiling."""
+        if not self.departure_spin_client.wait_for_server(timeout_sec=2.0):
+            raise RuntimeError('출차 회전 서버가 없습니다. Burger1 Nav2를 다시 준비하세요.')
+        original = self.spin_client
+        try:
+            self.spin_client = self.departure_spin_client
+            return self.spin(spin_dist=angle, time_allowance=allowance)
+        finally:
+            self.spin_client = original
+
+    def precision_spin(self, angle, allowance):
+        """Use the collision-checked slow-finish behavior only for final yaw."""
+        if not self.precision_spin_client.wait_for_server(timeout_sec=2.0):
+            raise RuntimeError('정밀 회전 서버가 없습니다. Burger1 Nav2를 다시 준비하세요.')
+        original = self.spin_client
+        try:
+            self.spin_client = self.precision_spin_client
+            return self.spin(spin_dist=angle, time_allowance=allowance)
+        finally:
+            self.spin_client = original
+
+    def stable_heading_pose(self, deadline):
+        """Require fresh stopped map headings stable within 1 deg for 0.3 s."""
+        end = min(deadline, time.monotonic() + 2.0)
+        samples = []
+        while time.monotonic() < end:
+            if (self.odom_received_at is None
+                    or time.monotonic() - self.odom_received_at >= 0.3
+                    or not self.odom_stopped):
+                raise RuntimeError('방향 확인 중 최신 정지 odom이 없습니다.')
+            pose = self.current_map_pose(timeout=min(0.2, end-time.monotonic()))
+            now = time.monotonic()
+            samples.append((now, pose))
+            samples = [(t, p) for t, p in samples if now-t <= 0.45]
+            if len(samples) >= 3 and now-samples[0][0] >= 0.3:
+                if all(abs(math.atan2(math.sin(p[2]-pose[2]),
+                                     math.cos(p[2]-pose[2]))) <= math.radians(1.0)
+                       for _, p in samples):
+                    return pose
+            spin_for(self, 0.05)
+        raise RuntimeError('정지 후 지도 각도가 안정되지 않았습니다 (0.3초/1°).')
 
     def _waitForNodeToActivate(self, node_name):
         """Bound state requests: a lost DDS response must not hang forever."""
@@ -309,6 +401,43 @@ class WaypointNavigator(BasicNavigator):
         p, q = msg.pose.pose.position, msg.pose.pose.orientation
         return planar_pose(p.x, p.y, q)
 
+    def _on_encoder(self, msg):
+        self.encoder_message, self.encoder_received_at = msg, time.monotonic()
+
+    def _encoder_counts(self):
+        msg = self.encoder_message
+        received_age = (time.monotonic()-self.encoder_received_at
+                        if self.encoder_received_at is not None else None)
+        if (msg is None or self.encoder_received_at is None
+                or received_age > 0.3
+                or not self._fresh_stamp(msg.header.stamp, 0.3)):
+            raise RuntimeError(f'ENCODER_DEPARTURE_FAILED: 최신 엔코더가 없습니다. '
+                               f'received_age_s={received_age}, '
+                               f'stamp_fresh={msg is not None and self._fresh_stamp(msg.header.stamp, 0.3)}')
+        if not msg.torque:
+            raise RuntimeError('ENCODER_DEPARTURE_FAILED: 모터 토크가 꺼졌습니다.')
+        return (msg.left_encoder, msg.right_encoder)
+
+    def _encoder_settled(self, timeout=2.0):
+        end = time.monotonic() + timeout
+        anchor, since = None, None
+        last_error = None
+        while rclpy.ok() and time.monotonic() < end:
+            spin_for(self, 0.05)
+            try:
+                current = self._encoder_counts()
+            except RuntimeError as exc:
+                # No motion is sent here. Require a new valid sample and a full
+                # stationary interval after DDS teardown or a feedback gap.
+                anchor, since = None, None
+                last_error = str(exc)
+                continue
+            if anchor is None or any(abs(encoder_delta(c, s)) > 5 for c, s in zip(current, anchor)):
+                anchor, since = current, time.monotonic()
+            elif time.monotonic() - since >= 0.3:
+                return
+        raise RuntimeError('ENCODER_DEPARTURE_FAILED: 엔코더 정지 확인 실패: '+str(last_error or 'counts still changing'))
+
     def _fresh_stamp(self, stamp, limit):
         age = (self.get_clock().now().nanoseconds
                - rclpy.time.Time.from_msg(stamp).nanoseconds) / 1e9
@@ -370,7 +499,7 @@ class WaypointNavigator(BasicNavigator):
             rclpy.spin_once(self, timeout_sec=min(0.1, remaining))
 
     def pre_backup(self, distance, speed, deadline):
-        """Short odometry-measured departure before any waypoint goal is sent."""
+        """Encoder-measured reverse through the smoother/collision monitor."""
         self._verify_departure_pipeline()
         active = {}
         status_subs = []
@@ -398,9 +527,11 @@ class WaypointNavigator(BasicNavigator):
                     if time.monotonic() >= coverage_retry_until:
                         raise RuntimeError(f'{exc} 후진을 시작하지 않습니다.') from exc
                     spin_for(self, 0.05)
-            start = self._departure_pose()
+            self._encoder_settled()
+            start = self._encoder_counts()
+            target = round(distance / ENCODER_METRES_PER_TICK)
             publisher = self.create_publisher(TwistStamped, 'cmd_vel_nav', 1)
-            end = min(deadline, time.monotonic() + distance / speed * 2.0 + 5.0)
+            end = min(deadline, time.monotonic() + 8.0)
             best, last_progress = 0.0, time.monotonic()
             previous = start
             coverage_gap_since = None
@@ -426,13 +557,18 @@ class WaypointNavigator(BasicNavigator):
                     if now - coverage_gap_since >= REAR_SCAN_RETRY_SECONDS:
                         raise RuntimeError(f'{exc} 0.5초간 회복되지 않아 출차를 중단합니다.') from exc
                     continue
-                pose = self._departure_pose()
-                if math.hypot(pose[0]-previous[0], pose[1]-previous[1]) > 0.03:
-                    raise RuntimeError('출차 중 odom 위치가 갑자기 변했습니다.')
-                previous = pose
-                progress = backup_progress(start, pose)
-                if progress >= distance:
-                    print(f'[출차] odom 후진 거리 {progress:.3f} m, 정지', flush=True)
+                counts = self._encoder_counts()
+                if any(abs(encoder_delta(c, p)) > 600 for c, p in zip(counts, previous)):
+                    raise RuntimeError('출차 중 엔코더가 갑자기 변했습니다.')
+                previous = counts
+                ticks = encoder_backup_counts(start, counts)
+                if min(ticks) < -100 or abs(ticks[0]-ticks[1]) > 200:
+                    raise RuntimeError('출차 엔코더 역방향/좌우 이동량 불일치')
+                if max(ticks) > target + ENCODER_TOLERANCE:
+                    raise RuntimeError('출차 엔코더 목표 초과')
+                progress = min(ticks) * ENCODER_METRES_PER_TICK
+                if min(ticks) >= target - 50:
+                    print(f'[출차] 엔코더 후진 {ticks}, 목표 {target} ±100, 정지', flush=True)
                     break
                 if progress > best + 0.005:
                     best, last_progress = progress, now
@@ -441,7 +577,7 @@ class WaypointNavigator(BasicNavigator):
                 command = TwistStamped()
                 command.header.stamp = self.get_clock().now().to_msg()
                 command.header.frame_id = frame_name(self, 'base_footprint')
-                command.twist.linear.x = -min(speed, max(0.015, (distance-progress)*0.8))
+                command.twist.linear.x = -min(speed, 0.02 if distance-progress < 0.04 else speed)
                 publisher.publish(command)
             else:
                 raise RuntimeError('출차 중 ROS가 종료되었습니다.')
@@ -454,36 +590,79 @@ class WaypointNavigator(BasicNavigator):
                         command.header.stamp = self.get_clock().now().to_msg()
                         command.header.frame_id = frame_name(self, 'base_footprint')
                         publisher.publish(command)
-                        time.sleep(0.05)
+                        spin_for(self, 0.05)
                 finally:
                     self.destroy_publisher(publisher)
             for subscription in status_subs:
                 self.destroy_subscription(subscription)
+        self._encoder_settled()
+        ticks = encoder_backup_counts(start, self._encoder_counts())
+        if any(abs(t-target) > ENCODER_TOLERANCE for t in ticks):
+            raise RuntimeError('ENCODER_DEPARTURE_FAILED: 후진 정지 후 엔코더 허용오차 초과')
         if not self.wait_until_stopped(timeout=min(5.0, max(0.0, deadline-time.monotonic()))):
             raise RuntimeError('출차 후 정지를 확인하지 못했습니다. 웨이포인트를 시작하지 않습니다.')
 
     def pre_backup_timed(self, distance, speed, deadline):
-        """Open-loop departure: command speed for distance/speed seconds.
+        """Departure reverse without scan: ends on encoder distance, tolerating feedback gaps.
 
-        This routine intentionally reads neither scan nor odom. The downstream
-        velocity smoother and collision monitor still receive the commands.
+        Commands still pass through the smoother, collision monitor and motion_owner.
+        Encoder counts are cumulative, so a stale or missing sample never aborts the
+        reverse; the next sample gives the true distance. The reverse ends when the
+        encoder distance reaches the target, or at the time limit. Without a fresh
+        encoder sample at the start it keeps the original time-only behaviour.
         """
         self._verify_departure_pipeline()
         duration = distance / speed
         if time.monotonic() + duration + 1.0 >= deadline:
             raise RuntimeError('시간제어 후진에 필요한 시간이 부족합니다.')
+        start_counts = None
+        probe_end = time.monotonic() + 1.0
+        while rclpy.ok() and time.monotonic() < probe_end:
+            try:
+                start_counts = self._encoder_counts()
+                break
+            except RuntimeError:
+                spin_for(self, 0.05)
+        limit = duration
+        if start_counts is not None:
+            limit = max(duration, min(duration + DEPARTURE_ENCODER_MARGIN_S,
+                                      deadline - time.monotonic() - 1.0))
         publisher = self.create_publisher(TwistStamped, 'cmd_vel_nav', 1)
+        started = time.monotonic()
+        progress, reached, torque_off = 0.0, False, False
+        last_msg = self.encoder_message
         try:
-            print(f'[출차] 시간제어 후진: {-speed:.3f} m/s × {duration:.2f} s '
-                  f'(계산상 {distance:.3f} m, 실측 아님)', flush=True)
-            end = time.monotonic() + duration
+            if start_counts is None:
+                print(f'[출차] 시간제어 후진: {-speed:.3f} m/s × {duration:.2f} s '
+                      f'(계산상 {distance:.3f} m, 시작 엔코더 없음 · 실측 아님)', flush=True)
+            else:
+                print(f'[출차] 엔코더 후진: 목표 {distance:.3f} m, {-speed:.3f} m/s, '
+                      f'최대 {limit:.2f} s', flush=True)
+            end = started + limit
+            next_publish = 0.0
             while rclpy.ok() and time.monotonic() < end:
-                command = TwistStamped()
-                command.header.stamp = self.get_clock().now().to_msg()
-                command.header.frame_id = frame_name(self, 'base_footprint')
-                command.twist.linear.x = -speed
-                publisher.publish(command)
-                spin_for(self, min(0.05, max(0.0, end - time.monotonic())))
+                now = time.monotonic()
+                if now >= next_publish:
+                    command = TwistStamped()
+                    command.header.stamp = self.get_clock().now().to_msg()
+                    command.header.frame_id = frame_name(self, 'base_footprint')
+                    command.twist.linear.x = -speed
+                    publisher.publish(command)
+                    next_publish = now + 0.05
+                # 바쁠 때 콜백을 몰아서 처리하다 한도 시간을 넘기지 않도록 한 번에 하나만 처리한다.
+                rclpy.spin_once(self, timeout_sec=min(0.05, max(0.0, end - time.monotonic())))
+                msg = self.encoder_message
+                if start_counts is None or msg is None or msg is last_msg:
+                    continue
+                last_msg = msg
+                if not msg.torque:
+                    torque_off = True
+                    break
+                back = encoder_backup_counts(start_counts, (msg.left_encoder, msg.right_encoder))
+                progress = (back[0] + back[1]) / 2 * ENCODER_METRES_PER_TICK
+                if progress >= distance:
+                    reached = True
+                    break
             if not rclpy.ok():
                 raise RuntimeError('시간제어 후진 중 ROS가 종료되었습니다.')
         finally:
@@ -495,6 +674,17 @@ class WaypointNavigator(BasicNavigator):
                 publisher.publish(command)
                 time.sleep(0.05)
             self.destroy_publisher(publisher)
+        if start_counts is not None:
+            elapsed = time.monotonic() - started
+            if reached:
+                print(f'[출차] 엔코더 후진 완료: {progress:.3f} m / {elapsed:.2f} s', flush=True)
+            elif torque_off:
+                print(f'[출차] 모터 토크 꺼짐으로 후진 중단: {progress:.3f} m / {elapsed:.2f} s', flush=True)
+            else:
+                print(f'[출차] 후진 시간 한도 도달: 엔코더 {progress:.3f} m / 목표 {distance:.3f} m '
+                      f'/ {elapsed:.2f} s', flush=True)
+            return progress
+        return None
 
     def wait_until_stopped(self, timeout=5.0):
         """Require fresh stationary odometry for 0.5 s before every new goal."""
@@ -577,14 +767,14 @@ class WaypointNavigator(BasicNavigator):
             if remaining <= 0:
                 return False
             distance, angle = travel_heading_error(
-                waypoint, self.current_map_pose(timeout=min(2.0, remaining)))
-            if distance <= self.xy_tolerance or abs(angle) <= math.radians(8):
+                waypoint, self.stable_heading_pose(deadline))
+            if distance <= self.xy_tolerance or abs(angle) <= math.radians(5):
                 return True
             if attempt == 2:
                 self.error('출발 방향 정렬이 수렴하지 않아 이동을 중단합니다.')
                 return False
             self.info(f'이동 전 정지 상태에서 진행 방향 정렬: {math.degrees(angle):.1f}°')
-            if not self.spin(spin_dist=angle, time_allowance=int(min(30, max(1, remaining)))):
+            if not self.precision_spin(angle, int(min(30, max(1, remaining)))):
                 return False
             if not wait_for_task(self, deadline, index):
                 return False
@@ -771,11 +961,15 @@ def report_failure(nav, index):
         code = getattr(details, 'error_code', None)
         message = getattr(details, 'error_msg', '')
         print(f'Nav2 error_code={code}, error_msg={message or "(메시지 없음)"}')
+        # Retry only recoverable translation failures, never TF/config errors or cancellation.
+        if result == TaskResult.FAILED and code in (104, 105, 106, 107, 207, 208):
+            nav.navigation_retry_reason = f'Nav2 error_code={code}'
     print('상세 원인은 Nav2 실행 터미널의 planner_server/controller_server 로그를 확인하세요.')
 
 
 def wait_for_task(nav, deadline, index, waypoint=None, terminal_handoff=False,
                   intermediate_handoff=False, planned_route=False):
+    nav.navigation_retry_reason = None
     guard = ApproachOvershootGuard() if waypoint is not None else None
     start_pose = None
     path_guard = PlannedPathGuard() if planned_route and guard is not None else None
@@ -802,7 +996,8 @@ def wait_for_task(nav, deadline, index, waypoint=None, terminal_handoff=False,
                 nav.error(f'Waypoint {index}: 목표 지나침 감지 — 최단 거리 '
                           f'{guard.best_distance:.3f} m → 현재 {distance:.3f} m. '
                           '주행을 취소하고 경로를 중단합니다.')
-                nav.cancel_guarded_translation()
+                if nav.cancel_guarded_translation():
+                    nav.navigation_retry_reason = 'target_overshoot'
                 return False
             if start_pose is None:
                 start_pose = pose
@@ -812,7 +1007,8 @@ def wait_for_task(nav, deadline, index, waypoint=None, terminal_handoff=False,
                 if path_guard.update(offset, now):
                     nav.error(f'Waypoint {index}: 실제 계획 경로에서 {offset:.3f} m '
                               '이탈한 상태가 1초 지속되어 주행을 중단합니다.')
-                    nav.cancel_guarded_translation()
+                    if nav.cancel_guarded_translation():
+                        nav.navigation_retry_reason = 'planned_path_deviation'
                     return False
                 if now >= next_progress_log:
                     path_text = f'{offset:.3f} m' if offset is not None else '계획 갱신 대기'
@@ -843,6 +1039,33 @@ def wait_for_task(nav, deadline, index, waypoint=None, terminal_handoff=False,
         report_failure(nav, index)
         return False
     return True
+
+
+def prepare_navigation_retry(nav, waypoint, deadline, index, attempt, retries, reason):
+    """Retry the current coordinate only, after stop/fresh pose/live action ownership."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0 or not nav.wait_until_stopped(timeout=min(5.0, remaining)):
+        raise RuntimeError('재시도 전 최신 odom에서 정지를 확인하지 못했습니다.')
+    nav.current_map_pose(timeout=min(2.0, max(0.0, deadline-time.monotonic())))
+    gate_path = getattr(nav, 'retry_gate_path', None) or (
+        Path(os.environ.get('BURGER_PROJECT_ROOT', (os.environ['AMR_WORKSPACE'])))
+        / ('data/'+nav.get_namespace().strip('/')+'/action_gate.json'))
+    try:
+        gate = json.loads(Path(gate_path).read_text())
+        age = time.monotonic() - float(gate['heartbeat'])
+        expected = getattr(nav, 'retry_goal_id', None)
+        if (gate.get('estop', True) or not gate.get('goal_id') or not 0 <= age <= 1.0
+                or (expected is not None and expected != gate['goal_id'])):
+            raise ValueError('inactive action ownership')
+        nav.retry_goal_id = gate['goal_id']
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise RuntimeError('재시도 중단: 긴급정지·명령 취소 또는 관제 연결/제어권을 확인하세요.') from exc
+    if attempt >= retries:
+        message = f'NAVIGATION_RETRIES_EXHAUSTED: Waypoint {index}, 재시도 {retries}회 소진 ({reason})'
+        nav.error(message)
+        raise RuntimeError(message)
+    nav.info(f'Waypoint {index}: 자동 재시도 {attempt + 1}/{retries} ({reason}). '
+             '정지 확인 완료; 같은 목표의 방향을 제자리에서 맞춘 뒤 전진합니다.')
 
 
 def terminal_heading_tolerance(distance, xy_tolerance):
@@ -1026,7 +1249,10 @@ def finish_waypoint(nav, waypoint, deadline, index, is_final=True,
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         return False
-    distance, angle = pose_errors(waypoint, nav.current_map_pose(timeout=min(2.0, remaining)))
+    pose = (nav.stable_heading_pose(deadline) if require_yaw
+            and hasattr(nav, 'stable_heading_pose') else
+            nav.current_map_pose(timeout=min(2.0, remaining)))
+    distance, angle = pose_errors(waypoint, pose)
     nav.info(f'Waypoint {index}: 위치 오차 {distance:.3f} m '
              f'(정지 후 허용 {xy_tolerance:.3f} m), 방향 오차 {math.degrees(angle):.1f}°')
     if distance > xy_tolerance:
@@ -1035,7 +1261,7 @@ def finish_waypoint(nav, waypoint, deadline, index, is_final=True,
         nav.error('정지 후 위치 허용오차 초과: 제한된 위치 재보정 가능 여부를 확인합니다.')
         return False
     if not require_yaw:
-        nav.info(f'Waypoint {index}: 중간 지점 도착; 다음 구간 시작 전에 진행 방향을 맞춥니다.')
+        nav.info(f'Waypoint {index}: 중간 지점 도착; 다음 구간으로 진행합니다.')
         return True
     corrections = 2 if getattr(nav, 'final_yaw_tolerance', None) else 1
     spun = False
@@ -1052,7 +1278,11 @@ def finish_waypoint(nav, waypoint, deadline, index, is_final=True,
         print(f'Waypoint {index}: 제자리 방향 정렬 {math.degrees(angle):.1f}° '
               f'({correction + 1}/{corrections})', flush=True)
         # Spin uses Nav2's collision checker and publishes zero linear velocity.
-        if not nav.spin(spin_dist=angle, time_allowance=int(min(30.0, remaining))):
+        allowance = int(min(30.0, remaining))
+        accepted = (nav.precision_spin(angle, allowance)
+                    if hasattr(nav, 'precision_spin') else
+                    nav.spin(spin_dist=angle, time_allowance=allowance))
+        if not accepted:
             print('방향 정렬 요청이 거절되었습니다.')
             return False
         if not wait_for_task(nav, deadline, index):
@@ -1069,11 +1299,13 @@ def finish_waypoint(nav, waypoint, deadline, index, is_final=True,
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return False
-        distance, angle = pose_errors(waypoint, nav.current_map_pose(timeout=min(2.0, remaining)))
+        pose = (nav.stable_heading_pose(deadline) if hasattr(nav, 'stable_heading_pose') else
+                nav.current_map_pose(timeout=min(2.0, remaining)))
+        distance, angle = pose_errors(waypoint, pose)
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         return False
-    if not spun:
+    if not spun and not hasattr(nav, 'stable_heading_pose'):
         distance, angle = pose_errors(waypoint, nav.current_map_pose(timeout=min(2.0, remaining)))
     nav.info(f'Waypoint {index}: 최종 위치 오차 {distance:.3f} m '
              f'(허용 {xy_tolerance:.3f} m), 방향 오차 {math.degrees(angle):.1f}° '
@@ -1098,7 +1330,7 @@ def finish_waypoint(nav, waypoint, deadline, index, is_final=True,
 def run_waypoints(nav, waypoints, timeout, tree_dir=None,
                   pre_backup_distance=0.0, pre_backup_speed=0.05,
                   pre_turn_angle_deg=0.0, pre_backup_open_loop=False,
-                  continuous_intermediate=False):
+                  continuous_intermediate=False, departure_flag=None, departure_consumed=None):
     if tree_dir is None:
         tree_dir = Path(get_package_share_directory('waffle_navigation')) / 'behavior_trees'
     trees = {mode: Path(tree_dir) / f'navigate_{mode}.xml'
@@ -1137,27 +1369,55 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
                  f'정지·방향 정렬 후 {TERMINAL_SPEED:.2f} m/s 직선 접근. 실패 시 재출발 없음.')
     goal_pose_list = make_goal_pose_list(nav, waypoints)
     nav_start = time.monotonic()
-    deadline = nav_start + timeout
-    if pre_backup_distance > 0:
+    progress = getattr(nav, 'route_progress', None)
+    nav.departure_in_progress = bool(pre_backup_distance or pre_turn_angle_deg or
+                                    (progress and not progress.state['turn_done']))
+    deadline = progress.state['deadline'] if progress else nav_start + timeout
+    nav_start = deadline - timeout
+    if progress and progress.state['backup_claimed'] and not progress.state['backup_done']:
+        raise RuntimeError('출차 후진 완료가 불확실합니다. 반복 후진하지 않습니다.')
+    if pre_backup_distance > 0 and not (progress and progress.state['backup_done']):
+        if progress: progress.claim_backup()
+        backed = None
         if pre_backup_open_loop:
-            nav.pre_backup_timed(pre_backup_distance, pre_backup_speed, deadline)
+            backed = nav.pre_backup_timed(pre_backup_distance, pre_backup_speed, deadline)
         else:
             nav.pre_backup(pre_backup_distance, pre_backup_speed, deadline)
-    if pre_turn_angle_deg:
+        if backed is not None and backed < 0.5 * pre_backup_distance:
+            # 바퀴가 거의 안 돈 상태에서 회전하면 벽·도킹대에 걸린다. 남은 거리를 기록하고 멈춘다.
+            if backed > 0.005:
+                departure_flag_write(departure_flag, f'departure_backup_partial '
+                                     f'{pre_backup_distance - backed:.3f} {time.strftime("%Y-%m-%dT%H:%M:%S")}')
+            raise RuntimeError(f'ENCODER_DEPARTURE_FAILED: 후진 거리 부족 {backed:.3f}/{pre_backup_distance:.3f} m. '
+                               '회전하지 않습니다. 같은 명령을 다시 보내면 남은 출차부터 합니다.')
+        departure_flag_write(departure_flag, f'departure_backup_done {time.strftime("%Y-%m-%dT%H:%M:%S")}')
+        if progress: progress.backup_done()
+    if ((pre_turn_angle_deg or (progress and 'turn_target' in progress.state))
+            and not (progress and progress.state['turn_done'])):
         remaining = deadline - time.monotonic()
         if remaining < 1.0 or not nav.wait_until_stopped(timeout=min(5.0, remaining)):
             raise RuntimeError('180도 회전 전 정지 상태를 확인하지 못했습니다.')
-        print(f'[출차] 제자리 회전 {pre_turn_angle_deg:g}°', flush=True)
+        angle = math.radians(pre_turn_angle_deg)
+        if progress:
+            angle = progress.turn_delta(nav.current_map_pose(timeout=2.)[2], pre_turn_angle_deg)
+        print(f'[출차] 제자리 회전 남은 각도 {math.degrees(angle):g}°', flush=True)
         remaining = deadline - time.monotonic()
-        if remaining < 1.0 or not nav.spin(
-                spin_dist=math.radians(pre_turn_angle_deg),
-                time_allowance=int(min(60.0, remaining))):
+        turn = nav.departure_spin if hasattr(nav, 'departure_spin') else (
+            lambda angle, allowance: nav.spin(spin_dist=angle, time_allowance=allowance))
+        if remaining < 1.0 or not turn(angle, int(min(60.0, remaining))):
             raise RuntimeError('출차 후 제자리 회전 요청이 거절되었습니다.')
         if not wait_for_task(nav, deadline, '출차 회전'):
             raise RuntimeError('출차 후 제자리 회전을 완료하지 못했습니다.')
         if not nav.wait_until_stopped(timeout=min(5.0, max(0.0, deadline-time.monotonic()))):
             raise RuntimeError('180도 회전 후 정지 상태를 확인하지 못했습니다.')
+        if progress: progress.turn_done()
+    if nav.departure_in_progress:
+        departure_flag_consume(departure_flag, departure_consumed)
+    nav.departure_in_progress = False
     for index, (waypoint, pose) in enumerate(zip(waypoints, goal_pose_list), start=1):
+        if progress and index <= progress.state['completed']:
+            nav.info(f'Waypoint {index}: 이번 명령에서 완료한 구간은 반복하지 않습니다.')
+            continue
         remaining = timeout - (time.monotonic() - nav_start)
         if remaining <= 0:
             print(f'{timeout:g}초 초과: 다음 지점을 시작하지 않습니다.')
@@ -1184,25 +1444,32 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
             if distance > .02 or abs(yaw) > math.radians(3):
                 nav.error('정지 후 위치/방향 허용오차 초과: 재출발 없이 중단합니다.')
                 return 1
+            if progress: progress.complete(index)
             continue
         if getattr(nav, 'nav2_position_then_yaw', False):
-            # At most one explicit, collision-checked correction after position
-            # success/stop, before any final yaw Spin. Never retry a failed action
-            # or redispatch after yaw alignment or excessive localization error.
-            retries = getattr(nav, 'position_arrival_retries', 0)
+            # Legacy mode keeps one limited position correction. Burger1 host
+            # recovery retries the current leg at most three times after stop,
+            # fresh pose and ownership checks; completed legs/departure never repeat.
+            recovery_retries = getattr(nav, 'navigation_retries', 0)
+            retries = max(getattr(nav, 'position_arrival_retries', 0), recovery_retries)
             for attempt in range(retries + 1):
                 if time.monotonic() >= deadline:
                     return 1
                 # A forward-only DWB can choose a stationary trajectory when the
                 # next waypoint lies behind the robot. Align using collision-
                 # checked Spin only for large heading changes, never blind yaw.
-                if getattr(nav, 'align_large_heading_before_navigation', False):
+                if getattr(nav, 'align_before_navigation', False) or attempt > 0:
+                    if not nav.wait_until_stopped(timeout=min(5.0, deadline-time.monotonic())):
+                        return 1
+                    if not nav.align_for_travel(waypoint, deadline, index):
+                        return 1
+                elif getattr(nav, 'align_large_heading_before_navigation', False):
                     remaining = deadline-time.monotonic()
                     if remaining <= 0:
                         return 1
                     distance, heading = travel_heading_error(
                         waypoint, nav.current_map_pose(timeout=min(2.0, remaining)))
-                    if distance > nav.xy_tolerance and abs(heading) > math.radians(35):
+                    if distance > nav.xy_tolerance and abs(heading) > math.radians(getattr(nav,"prealign_heading_deg",45.0)):
                         if not nav.wait_until_stopped(timeout=min(5.0, remaining)):
                             nav.error('구간 시작 방향 정렬 전 정지를 확인하지 못했습니다.')
                             return 1
@@ -1217,10 +1484,19 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
                 if not nav.goToPose(pose, behavior_tree=str(trees[mode])):
                     return 1
                 if not wait_for_task(nav, deadline, index, waypoint=waypoint, planned_route=True):
+                    reason = getattr(nav, 'navigation_retry_reason', None)
+                    if recovery_retries and reason:
+                        prepare_navigation_retry(nav, waypoint, deadline, index, attempt, retries, reason)
+                        continue
                     return 1
                 if finish_waypoint(nav, waypoint, deadline, index,
-                                   is_final=index == len(waypoints), require_yaw=True):
+                                   is_final=index == len(waypoints),
+                                   require_yaw=(index == len(waypoints) or not getattr(nav,"skip_intermediate_yaw",False))):
                     break
+                if recovery_retries and getattr(nav, 'position_retry_requested', False):
+                    prepare_navigation_retry(nav, waypoint, deadline, index, attempt, retries,
+                                             'position_tolerance_exceeded')
+                    continue
                 if (attempt >= retries or
                         not getattr(nav, 'position_retry_before_yaw', False)):
                     nav.error('좌표 도착/목표 방향 검증 실패: 다음 지점으로 진행하지 않습니다.')
@@ -1229,10 +1505,12 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
                     nav.error('위치 재보정 전 정지를 확인하지 못했습니다.')
                     return 1
                 nav.info('정지 후 위치 오차 8cm 이내: 회전 전에 Nav2로 한 번 재접근합니다.')
+            if progress: progress.complete(index)
             continue
         if index == len(waypoints) and getattr(nav, 'final_staging_distance', 0.0) > 0:
             if not staged_final_approach(nav, waypoint, deadline, index, trees[mode]):
                 return 1
+            if progress: progress.complete(index)
             continue
         # At most two additional Nav2 attempts. Never relax the tolerance,
         # bypass collision checking, or change the requested travel direction.
@@ -1289,12 +1567,24 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
             if not nav.wait_until_stopped(timeout=min(5.0, max(0.0, deadline-time.monotonic()))):
                 return 1
             nav.info('최신 지도 위치 기준으로 같은 목표에 다시 접근합니다.')
+        if progress: progress.complete(index)
     print('Goal succeeded!')
     return 0
 
 
-def main():
+def main(argv=None, prepared_nav=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--navigation-retries', type=int, default=0,
+                        help='Burger1 관제 위치 주행 실패 재시도 횟수(0~3), 출차 반복 없음')
+    parser.add_argument('--align-before-navigation', action='store_true',
+                        help='각 구간 출발 전에 정지 상태에서 진행 방향 정렬')
+    parser.add_argument('--route-progress', help='Single mission completed-leg checkpoint')
+    parser.add_argument('--departure-flag', default=None,
+                        help='출차 표시 파일: 후진 완료/부분 진행을 기록하고 출차가 끝나면 치운다')
+    parser.add_argument('--departure-consumed', default=None,
+                        help='출차가 끝난 뒤 출차 표시 파일을 옮길 경로')
+    parser.add_argument('--encoder-backup-only', action='store_true',
+                        help='도킹 재시도: 엔코더 후진만 실행, 회전/웨이포인트 없음')
     parser.add_argument('--namespace', default='', help='Robot namespace and TF frame prefix')
     parser.add_argument('--waypoints', default=str(Path(
         get_package_share_directory('waffle_navigation')) / 'config/waypoints.yaml'))
@@ -1311,8 +1601,11 @@ def main():
                         help='출차 후 Nav2 Spin 제자리 회전 각도(도), 기본 0')
     parser.add_argument('--final-post-turn-xy-tolerance', type=float,
                         help='최종 지점 회전 완료 후 위치 허용반경(m); 이동·회전 전 기준은 유지')
+    parser.add_argument('--prealign-heading-deg',type=float,default=45.0)
+    parser.add_argument('--skip-intermediate-yaw',action='store_true',
+                        help='중간 지점 방향 정렬을 생략하고 최종 지점 방향은 유지')
     parser.add_argument('--align-large-heading-before-navigation', action='store_true',
-                        help='다음 좌표 진행 방향 차이가 35도 초과이면 정지 회전 후 전진')
+                        help='설정한 큰 방향 차이에서만 구간 시작 전 제자리 회전')
     parser.add_argument('--position-arrival-retries', type=int, choices=(0, 1), default=0,
                         help='좌표 도착 후 정지 오차 8cm 이내일 때 회전 전 Nav2 재접근 횟수 (0 또는 1)')
     parser.add_argument('--final-yaw-tolerance-deg', type=float,
@@ -1328,7 +1621,14 @@ def main():
                         help='5cm 이내 Nav2 저속 XY/yaw 동시 보정; 모든 지점 2cm/3도 검증')
     parser.add_argument('--final-staging-distance', type=float, default=0.0,
                         help='최종 방향을 먼저 맞출 진입점 거리(m), 0이면 기존 접근; 전진 전용')
-    args = parser.parse_args(remove_ros_args()[1:])
+    args = parser.parse_args(remove_ros_args(args=argv)[1:])
+    if not 0 <= args.navigation_retries <= 3:
+        parser.error('--navigation-retries는 0~3이어야 합니다.')
+    if args.navigation_retries and (args.namespace.strip('/') not in ('burger1','burger2')
+            or not args.nav2_position_then_yaw or not args.align_before_navigation):
+        parser.error('재시도는 burger1 위치 후 방향 모드와 출발 전 방향 정렬이 필요합니다.')
+    if not math.isfinite(args.prealign_heading_deg) or not 45 <= args.prealign_heading_deg <= 120:
+        parser.error("prealign-heading-deg must be between 45 and 120")
     if args.final_post_turn_xy_tolerance is not None and (
             not args.nav2_position_then_yaw or
             not math.isfinite(args.final_post_turn_xy_tolerance) or
@@ -1387,7 +1687,12 @@ def main():
     if args.nav2_precision_pose:
         print('주행 순서: 각 좌표까지 Nav2 전진 피드백 주행 → 5cm 이내 저속 XY/yaw 동시 보정', flush=True)
     elif args.nav2_position_then_yaw:
-        print('주행 순서: 각 좌표까지 Nav2 전진 피드백 주행 → 정지 → 해당 목표 yaw 회전', flush=True)
+        if args.skip_intermediate_yaw:
+            print('주행 순서: 중간 통로는 위치 확인 후 다음 경로 → 최종 지점만 목표 yaw 정렬',flush=True)
+        else:
+            print('주행 순서: 각 좌표까지 Nav2 전진 피드백 주행 → 정지 → 해당 목표 yaw 회전',flush=True)
+        if args.align_large_heading_before_navigation:
+            print(f'구간 시작 제자리 회전: 방향 차이 {args.prealign_heading_deg:g}도 초과에서만',flush=True)
     elif args.final_staging_distance:
         last = waypoints[-1]
         angle = math.radians(last['yaw'])
@@ -1399,17 +1704,39 @@ def main():
               f'직선 속도 {TERMINAL_SPEED:.2f} m/s', flush=True)
     if args.final_post_turn_xy_tolerance is not None:
         print(f'최종 회전 후 위치 허용반경: {args.final_post_turn_xy_tolerance:.3f} m (회전 전 도착 기준 유지)', flush=True)
+    if args.navigation_retries:
+        print(f'관제 주행 복구: 최초 시도 + 최대 {args.navigation_retries}회 재시도. '
+              '실패 재시도에서 정지·제자리 정렬, 정상 주행은 이동 중 보정, 출차 반복 없음.', flush=True)
     print(f'좌표 도착 후 회전 전 재접근: 최대 {args.position_arrival_retries}회 (위치 오차 8cm 이내)')
     if args.dry_run:
         return 0
 
     # Ctrl+C 시 ROS context를 먼저 닫지 않고 액션 취소를 요청합니다.
-    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
-    nav = WaypointNavigator(namespace=args.namespace)
+    owns_navigator = prepared_nav is None
+    if owns_navigator:
+        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    elif prepared_nav.get_namespace().strip("/") != args.namespace.strip("/"):
+        raise ValueError("Prepared navigator namespace mismatch")
+    nav = prepared_nav if prepared_nav is not None else WaypointNavigator(namespace=args.namespace)
     nav.final_yaw_tolerance = (math.radians(args.final_yaw_tolerance_deg)
                                if args.final_yaw_tolerance_deg is not None else None)
+    nav.prealign_heading_deg = args.prealign_heading_deg
+    nav.skip_intermediate_yaw = args.skip_intermediate_yaw
     nav.align_large_heading_before_navigation = args.align_large_heading_before_navigation
     nav.position_arrival_retries = args.position_arrival_retries
+    nav.navigation_retries = args.navigation_retries
+    nav.align_before_navigation = args.align_before_navigation
+    nav.retry_goal_id = None
+    nav.route_progress = None
+    if args.route_progress:
+        root = Path(os.environ.get('BURGER_PROJECT_ROOT', (os.environ['AMR_WORKSPACE'])))
+        progress_path = Path(args.route_progress).resolve()
+        allowed = (root/'data'/args.namespace.strip('/')/'retry_progress').resolve()
+        if args.namespace.strip('/') not in ('burger1','burger2') or progress_path.parent != allowed:
+            raise ValueError('Retry checkpoint must belong to the Burger1 mission directory')
+        spec = importlib.util.spec_from_file_location('mission_retry_runtime', root/'robot'/args.namespace.strip('/')/'navigation/mission_retry.py')
+        runtime = importlib.util.module_from_spec(spec); spec.loader.exec_module(runtime)
+        nav.route_progress = runtime.RouteProgress(progress_path, waypoints, args.timeout)
     nav.final_post_turn_xy_tolerance = args.final_post_turn_xy_tolerance
     nav.terminal_approach_distance = args.terminal_approach_distance
     nav.final_staging_distance = args.final_staging_distance
@@ -1418,24 +1745,35 @@ def main():
     nav.arrival_tuning = tuning
     nav.intermediate_xy_tolerance = tuning.get('intermediate_xy_tolerance', INTERMEDIATE_XY_TOLERANCE)
     try:
+        if args.encoder_backup_only:
+            nav.departure_in_progress = True
+            backup = nav.pre_backup_timed if args.pre_backup_open_loop else nav.pre_backup
+            backup(args.pre_backup_distance,args.pre_backup_speed,time.monotonic()+20)
+            nav.departure_in_progress = False
+            return 0
         return run_waypoints(nav, waypoints, args.timeout,
                              pre_backup_distance=args.pre_backup_distance,
                              pre_backup_speed=args.pre_backup_speed,
                              pre_turn_angle_deg=args.pre_turn_angle_deg,
                              pre_backup_open_loop=args.pre_backup_open_loop,
-                             continuous_intermediate=args.continuous_intermediate)
+                             continuous_intermediate=args.continuous_intermediate,
+                             departure_flag=args.departure_flag,
+                             departure_consumed=args.departure_consumed)
     except KeyboardInterrupt:
         print('사용자 중단: 주행 취소 요청', flush=True)
         cancel_and_wait(nav)
         return 130
     except RuntimeError as exc:
+        if getattr(nav,'departure_in_progress',False):
+            print(f'ENCODER_DEPARTURE_FAILED: {exc}',flush=True)
         print(f'Nav2 실행 오류: {exc}')
         cancel_and_wait(nav)
         return 1
     finally:
-        nav.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        if owns_navigator:
+            nav.destroy_node()
+            if rclpy.ok():
+                rclpy.shutdown()
 
 
 if __name__ == '__main__':

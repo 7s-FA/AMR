@@ -12,7 +12,7 @@ import time
 def available(address, entry):
     try:
         meta = json.loads(address.with_suffix('.json').read_text())
-        if not address.exists() or meta['entry'] != str(entry): return False
+        if not address.exists() or os.path.abspath(meta['entry']) != os.path.abspath(entry): return False
         if meta['boot'] != Path('/proc/sys/kernel/random/boot_id').read_text().strip(): return False
         if hashlib.sha256(entry.read_bytes()).hexdigest() != meta['sha256']: return False
         if 'config' in meta and hashlib.sha256(Path(meta['config']).read_bytes()).hexdigest() != meta['config_sha256']: return False
@@ -25,6 +25,13 @@ def main():
     if len(sys.argv) < 2: return 2
     entry = Path(sys.argv[1]); args = sys.argv[2:]
     address = Path(os.environ.get('XDG_RUNTIME_DIR', '/run/user/'+str(os.getuid())))/os.environ.get('BURGER_PREPARED_SOCKET_NAME', 'burger1-waypoint-ready.sock')
+    if len(args) == 2 and args[0] == '--wait-ready':
+        end = time.monotonic() + float(args[1])
+        while True:
+            if available(address, entry): return 0
+            remaining = end-time.monotonic()
+            if remaining <= 0: return 2
+            time.sleep(min(.1, remaining))
     if not available(address, entry): return 2
     if args == ['--check']: return 0
     probe = args in (['--probe'], ['--verify'])

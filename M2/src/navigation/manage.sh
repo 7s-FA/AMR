@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
+# Load paths belonging to this AMR runtime (also in systemd jobs).
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 set -eo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../../.." && pwd)
 ROBOT=$(basename "$(dirname "$HERE")")
-CAMERA_ROOT=/home/ubuntu/final_robot_camera
-[[ "$ROBOT" != burger1 ]] || CAMERA_ROOT=/home/ubuntu/final_robot_camera_burger1
+CAMERA_ROOT=${AMR_CAMERA}
+[[ "$ROBOT" != burger2 ]] || CAMERA_ROOT=${AMR_CAMERA}
 ACTION=$1
 case "$ACTION" in
  status) exec systemctl --user status "$ROBOT-base.service" "$ROBOT-localization.service" "$ROBOT-nav2.service" "$ROBOT-motion-owner.service" "$ROBOT-nav-control.service" "$ROBOT-docking.service" "$ROBOT-rest.service" --no-pager ;;
  stop|off|dock-stop)
   bash "$HERE/set_mode.sh" idle || true
+  # Prepared waypoint commands must receive the same interruption as cold CLI commands.
+  systemctl --user kill --kill-whom=main --signal=USR1 burger2-waypoint-ready.service 2>/dev/null || true
   systemctl --user kill --kill-whom=main --signal=USR1 burger2-rest-ready.service 2>/dev/null || true
   pkill -INT -u "$USER" -f '[/]nav2_waypoints' || true
-  # Transient units may never have existed or have already been collected.
-  # That is already stopped, not a failed mission cleanup.
   for unit in "$ROBOT-docking.service" "$ROBOT-rest.service"; do
     state=$(systemctl --user show "$unit" --property=LoadState --value 2>/dev/null || true)
     [[ "$state" == loaded ]] || continue
@@ -26,6 +33,14 @@ case "$ACTION" in
 esac
 source "$HERE/mission_guard.sh";mission_guard "$ROBOT"
 RUNTIME=$(printenv XDG_RUNTIME_DIR || echo /tmp)
+if [[ "$ACTION" == ready ]]; then
+ # Preparation blocks new missions, but is not itself motor movement.
+ exec 8>"$RUNTIME/$ROBOT-prepare-$UID.lock"
+ flock -n 8 || { echo '다른 준비 명령 실행 중입니다.' >&2;exit 1; }
+ python3 "$HERE/ready_parallel.py"
+ echo "$ROBOT 준비 완료. 위치 추정 유지."
+ exit
+fi
 exec 9>"$RUNTIME/$ROBOT-motion-$UID.lock"
 flock -n 9 || { echo '다른 이동 명령 실행 중입니다.' >&2;exit 1; }
 if systemctl --user is-active --quiet "$ROBOT-docking.service" || systemctl --user is-active --quiet "$ROBOT-rest.service" || pgrep -u "$USER" -f '[/]nav2_waypoints|[d]ocking_node.py' >/dev/null;then
@@ -34,10 +49,7 @@ fi
 # Do not pass the caller's action/waypoint arguments into preparation.
 source "$HERE/warm.sh" ""
 bash "$HERE/ensure_camera.sh"
-if [[ "$ACTION" == ready || "$ACTION" == dock || "$ACTION" == park ]];then bash "$HERE/ensure_docking_ready.sh";fi
-if [[ "$ACTION" == ready ]];then
- bash "$HERE/set_mode.sh" prepare
- echo "$ROBOT 준비 완료. 지정 주차장 시작 위치 자동 적용 / 이후 위치 추정 유지.";exit;fi
+bash "$HERE/ensure_docking_ready.sh"
 
 MODE=normal
 if [[ "$ACTION" == park ]];then
