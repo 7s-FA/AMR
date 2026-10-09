@@ -1,3 +1,6 @@
+# ========================================================================
+# 역할: Nav2 서비스 (launch_nav2.sh). 위치추정·모터 관리자가 먼저 떠 있어야 한다.
+# ========================================================================
 [Unit]
 Description=burger1 persistent nav2
 Requires=burger1-localization.service burger1-motion-owner.service

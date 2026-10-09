@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: 도킹 실행. 대기 작업자(docking_standby)가 있으면 docking_warm_client 로 요청(빠른 경로),
+#       없으면 대기 작업자를 멈추고 docking_node.py 를 직접 실행. 로그: data/<로봇>/docking_logs/<시각>/
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 도킹 ROS 노드. 카메라 관측·odom·모터 상태·IR(GPIO)을 받아 docking_control 에 넣고, 결과 속도를 cmd_vel_direct 로 낸다.
+#       motion_owner 가 direct 모드일 때만 모터로 전달된다. IR 은 GPIO 를 직접 읽어 즉시 정지한다.
+# 실행: 평소에는 docking_standby.py 가 미리 띄운 상태에서 요청마다 DockingNode 를 만든다 (빠른 시작).
+#       대기 작업자가 없으면 start_docking_engine.sh 가 python3 docking_node.py 로 직접 실행.
+# 결과: 마지막에 상태(DOCKED/FAULT…)와 이유, 엔코더 이동량을 보고 → terminal_wrapper/terminal_evidence 가 성공 여부 판정.
+# ========================================================================
 """Standalone robot-local docking controller with direct GPIO stop."""
 import argparse
 import json
@@ -26,7 +33,9 @@ from docking_control import DockingControl, Settings
 from ir_sensor import GPIOInput
 
 
+# 도킹 컨트롤러 노드 (/<로봇>/docking_controller).
 class DockingNode(Node):
+    # 설정 확인, 발행자(cmd_vel_direct·상태)·구독(odom·sensor_state)·서비스(start/stop)·10ms 제어 타이머 생성.
     def __init__(self, config, gpio, execute=False, auto_start=False, vision_queue=None, recorder=None, graph_guard=None):
         robot = runtime_robot(config)
         super().__init__('docking_controller', namespace='/'+robot)
@@ -40,7 +49,7 @@ class DockingNode(Node):
         self.last_capture_ns = -1
         self.auto_start = auto_start
         self.auto_start_deadline = time.monotonic()+15.0
-        self.last_graph_check = self.last_status = self.last_publish = float('-inf')
+        self.last_status = self.last_publish = float('-inf')
         self.graph_error = 'graph_not_checked'
         self.last_state = None
         self.last_controller_report = {}
@@ -82,11 +91,13 @@ class DockingNode(Node):
         self.get_logger().info(
             f"Docking target: {config.get('docking_mode', 'normal')}; IDs: {self.target_ids}")
 
+    # 메시지 시각이 limit 초 이내인지.
     def stamp_fresh(self, stamp, limit):
         ns = int(stamp.sec)*1_000_000_000 + int(stamp.nanosec)
         age = (self.get_clock().now().nanoseconds-ns)/1e9
         return ns > 0 and -.10 <= age <= limit
 
+    # 카메라 관측 처리 (콜백 시간 측정 포함).
     def observation(self, msg):
         mark = self.callback_metrics.begin()
         try:
@@ -94,6 +105,7 @@ class DockingNode(Node):
         finally:
             self.callback_metrics.end('vision_observation', mark)
 
+    # 관측 JSON 검사: 최신인지, 내 보드·마커 ID 인지, 순서가 맞는지 → 제어기에 반영.
     def _observation(self, msg):
         now = time.monotonic()
         try:
@@ -156,6 +168,7 @@ class DockingNode(Node):
                 self.control.halt('vision_invalid: '+str(exc))
                 self.publish_velocity(0., 0.)
 
+    # odom 처리 (콜백 시간 측정 포함).
     def odometry(self, msg):
         mark = self.callback_metrics.begin()
         try:
@@ -163,6 +176,7 @@ class DockingNode(Node):
         finally:
             self.callback_metrics.end('odom', mark)
 
+    # odom 을 (x, y, yaw, 속도)로 바꿔 제어기에 반영.
     def _odometry(self, msg):
         limit = (self.control.cfg.odom_recovery_fresh_s if self.control.state == 'ODOM_WAIT'
                  else self.control.cfg.odom_timeout_s)
@@ -180,23 +194,27 @@ class DockingNode(Node):
         yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
         self.control.set_odom(p.x, p.y, yaw, twist.linear.x, twist.angular.z, time.monotonic())
 
+    # 통신 감시 결과 (다른 속도 발행자가 있으면 오류).
     def graph_check(self):
         if self.graph_guard is None:
             return None
         self.last_graph_snapshot = self.graph_guard.snapshot()
         return self.last_graph_snapshot['error']
 
+    # 직접 만든 통신 감시 프로세스가 있으면 함께 종료.
     def destroy_node(self):
         if self.graph_guard is not None and self.owns_graph_guard:
             self.graph_guard.close()
             self.graph_guard = None
         return super().destroy_node()
 
+    # GPIO 로 IR 센서를 직접 읽어 제어기에 반영.
     def read_ir(self):
         self.physical_high = self.gpio.high()
         self.control.set_ir(self.physical_high, time.monotonic())
         return self.physical_high
 
+    # sensor_state 처리 (콜백 시간 측정 포함).
     def motor_state(self, msg):
         mark = self.callback_metrics.begin()
         try:
@@ -204,6 +222,7 @@ class DockingNode(Node):
         finally:
             self.callback_metrics.end('sensor_state', mark)
 
+    # 모터 토크·엔코더 기록 (도킹 실패 시 후진 필요 판단용).
     def _motor_state(self, msg):
         now = time.monotonic()
         self.encoder_message, self.encoder_received_at = msg, now
@@ -216,12 +235,14 @@ class DockingNode(Node):
         if self.stamp_fresh(msg.header.stamp, .5):
             self.motor_torque, self.motor_time = bool(msg.torque), time.monotonic()
 
+    # 최근 5초 안에 엔코더 샘플이 충분하면 마지막 값.
     def current_encoder(self):
         now = time.monotonic()
         if sum(now-at <= 5.0 for at, _ in self.encoder_samples) <= 3:
             return None
         return self.encoder_samples[-1][1]
 
+    # 도킹 중 엔코더 샘플이 부족하면 오류.
     def encoder_error(self, now):
         if (self.execute and self.encoder_attempt_started is not None
                 and now-self.encoder_attempt_started >= 5.0
@@ -229,11 +250,13 @@ class DockingNode(Node):
             return 'encoder_samples_insufficient'
         return None
 
+    # 시작·현재 엔코더 값 보고 (sequence_runner 가 후진 여부 판단).
     def encoder_retry_report(self):
         current = self.current_encoder()
         return {'valid': self.docking_encoder_start is not None and current is not None,
                 'start': self.docking_encoder_start, 'current': current}
 
+    # 모터 상태가 오래됐거나 토크가 꺼졌으면 오류.
     def motor_error(self, now):
         if not self.execute:
             return None
@@ -241,6 +264,7 @@ class DockingNode(Node):
             return 'motor_state_timeout'
         return None if self.motor_torque else 'motor_torque_off'
 
+    # 시작 전 검사, 토크가 꺼져 있으면 켜고 다시 확인.
     def prepare_start(self, now):
         error = self.control.start_error(now)
         if error:
@@ -272,6 +296,7 @@ class DockingNode(Node):
             self.encoder_attempt_started = now
         return result
 
+    # start 서비스: 통신·IR 확인 후 도킹 시작.
     def start(self, _, response):
         try:
             error = self.graph_check()
@@ -297,6 +322,7 @@ class DockingNode(Node):
             response.success, response.message = False, str(exc)
         return response
 
+    # stop 서비스: 운영자 정지, 0 속도.
     def stop(self, _, response):
         self.control.halt('operator_stop', fault=False)
         self.auto_start = False
@@ -304,6 +330,7 @@ class DockingNode(Node):
         response.success, response.message = True, 'Stopped; restart requires a new start service call.'
         return response
 
+    # cmd_vel_direct 로 (v, w) 발행.
     def publish_velocity(self, v, w):
         msg = TwistStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -316,6 +343,7 @@ class DockingNode(Node):
             self.recorder.record('command', {'linear_mps': float(v), 'angular_rps': float(w),
                                             'execute': self.execute})
 
+    # 10ms 제어 주기 (콜백 시간 측정 포함).
     def tick(self):
         mark = self.callback_metrics.begin()
         try:
@@ -323,6 +351,7 @@ class DockingNode(Node):
         finally:
             self.callback_metrics.end('control_tick_including_inputs', mark)
 
+    # IR 읽기 → 입력·통신·모터 검사 → 자동 시작 → 제어 계산 → 속도 발행 → 상태 방송·기록.
     def _tick(self):
         tick_started = time.monotonic()
         now = tick_started
@@ -438,6 +467,7 @@ class DockingNode(Node):
             self.last_state, self.last_status = self.control.state, now
 
 
+# 단독 실행: 설정 읽기, GPIO·노드 생성, 결과가 나올 때까지 돌리고 종료 코드로 성공 여부 반환.
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', default=str(Path(__file__).with_name('docking.yaml')))
@@ -454,6 +484,7 @@ def main():
     Settings(**config['control'])  # Validate before acquiring hardware.
     gpio = node = vision = recorder = None
     exit_reason = 'unexpected_exit'
+    # 종료 신호를 KeyboardInterrupt 로 바꿔 정리 코드가 돌게 한다.
     def interrupted(signum, frame):
         raise KeyboardInterrupt
     for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):

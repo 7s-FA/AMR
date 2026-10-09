@@ -1,4 +1,8 @@
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: configure_nav2_network 함수. docking.yaml 의 Wi-Fi 인터페이스로 DDS 프로필(data/<로봇>/dds_nav2.xml)을 만들고
+#       로컬 공유메모리 전송을 추가해 FASTRTPS_DEFAULT_PROFILES_FILE 로 지정한다. 사용처: launch_*.sh, nav_env.bash.
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

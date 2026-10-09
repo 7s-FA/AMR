@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: 종단 동작(도킹/주차/rest) 감싸기. 모드 direct → 실제 동작 실행·로그 저장 → terminal_evidence 로 결과 파일 작성.
+#       시작할 때 출차 표시를 'terminal_started' 로 남겨, 중간에 끊겨도 다음 주행에서 위치를 확인하도록 한다.
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

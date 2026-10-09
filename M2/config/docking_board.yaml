@@ -1,3 +1,6 @@
+# ========================================================================
+# 역할: 일반 도킹 보드(창고/조립대) 마커 배치 (ID, 크기, 위치). 보드를 다시 만들 때만 수정.
+# ========================================================================
 # User geometry: 30mm sides, 2x2, 10mm edge gaps (40mm center spacing).
 # Rows below: top-left, top-right, bottom-left, bottom-right.
 # Verified from docs/markers/burger2/small_30mm/board_config.json and the supplied PNG.

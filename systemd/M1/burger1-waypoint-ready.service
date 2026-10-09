@@ -1,3 +1,6 @@
+# ========================================================================
+# 역할: 웨이포인트 대기 작업자 서비스 (start_waypoint_worker.sh).
+# ========================================================================
 [Unit]
 Description=Burger1 prepared waypoint ROS connections (no idle motion)
 PartOf=burger1-nav-control.service

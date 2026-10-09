@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 로봇 준비를 병렬로 한 번 수행. 위치추정·본체를 먼저 확인한 뒤 카메라/도킹, rest 대기, Nav2, 액션 서버를 동시에 준비하고
+#       마지막에 motion_mode 'prepare'(Nav2 준비 확인, 모터는 idle)와 웨이포인트 대기 작업자 시작까지 한다. 주행하지 않음.
+# 실행: manage.sh ready (operation.py ready, host_prepare.py 가 호출). motion_mode.py 도 start_missing() 을 사용.
+# ========================================================================
 """One-shot parallel startup. No routes, velocity commands or service restarts."""
 from concurrent.futures import ThreadPoolExecutor
 import os
@@ -7,6 +12,7 @@ import subprocess
 import time
 
 
+# systemd 서비스가 꺼져 있을 때만 시작 (실행 중이면 그대로, 종료 중이면 오류).
 def start_missing(unit, run=subprocess.run, wait=True):
     state = run(['systemctl', '--user', 'show', unit, '-p', 'ActiveState', '--value'],
                 capture_output=True, text=True, check=True, timeout=5).stdout.strip()
@@ -18,6 +24,7 @@ def start_missing(unit, run=subprocess.run, wait=True):
     return 'started'
 
 
+# 준비 작업 여러 개를 4스레드로 동시에 실행하고 실패를 모아 보고.
 def parallel_checks(jobs, optional=()):
     errors = []
     # Each job checks its own dependencies; there is no arbitrary global order.
@@ -44,6 +51,7 @@ def parallel_checks(jobs, optional=()):
             raise RuntimeError('; '.join(errors))
 
 
+# 이동 중이면 거부 → warm.sh → 병렬 준비 → 모드 prepare → 웨이포인트 대기 서비스 시작.
 def main():
     here = Path(__file__).absolute().parent
     robot = here.parent.name
@@ -55,6 +63,7 @@ def main():
         if op.busy(include_preparation=False):
             raise RuntimeError('Robot is moving; preparation refused')
     env = dict(os.environ, BURGER_PARALLEL_PREPARE='1')
+    # 같은 폴더의 쉘 스크립트를 실행하는 작업 함수를 만든다.
     def script(name, timeout=100):
         def execute():
             subprocess.run(['/bin/bash', str(here/name)], env=env, check=True, timeout=timeout)

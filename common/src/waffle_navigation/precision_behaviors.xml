@@ -1,3 +1,6 @@
+<!--
+  역할: 회전 플러그인(PrecisionSpin, DepartureSpin)을 Nav2 에 등록하는 목록.
+-->
 <library path="precision_spin_behavior">
   <class type="waffle_navigation::PrecisionSpin" base_class_type="nav2_core::Behavior">
     <description>Nav2 Spin with a slow final 15-degree speed envelope.</description>

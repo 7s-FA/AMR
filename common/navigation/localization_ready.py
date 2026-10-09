@@ -1,7 +1,13 @@
+# ========================================================================
+# 역할: 위치추정 lifecycle 이 활성인지 '먼저 읽고' 판단. 기동이 명시적으로 실패했을 때만 한 번 복구한다.
+#       응답이 없는 것은 실패로 보지 않는다 (재시작 남발 방지).
+# 사용처: check_ready.py 가 import.
+# ========================================================================
 """Read-before-recover localization readiness; no motor or pose commands."""
 import time
 
 
+# map_server·amcl 이 ACTIVE 가 될 때까지 대기. 명시적 실패(bringup 중단)일 때만 recover() 1회.
 def ensure_active(query, manager_active, failed_bringup, recover,
                   timeout=90., clock=time.monotonic, sleep=time.sleep, report=print):
     """Only recover an explicitly aborted bringup, once, from known stable states.

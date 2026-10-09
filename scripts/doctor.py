@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 설치 상태 점검 (읽기 전용). 실행 폴더·서비스 파일·빌드 결과가 있는지 본다. 주행 준비 확인은 아님.
+# 실행: python3 scripts/robot.py --robot M1 doctor
+# ========================================================================
 """Read-only installation checks. This is not a driving/readiness test."""
 import json
 from pathlib import Path
@@ -6,6 +10,7 @@ import subprocess
 import sys
 
 
+# 점검 항목 출력.
 def main():
     runtime = Path(sys.argv[1]).absolute()
     cfg = json.loads((runtime/'runtime.json').read_text())

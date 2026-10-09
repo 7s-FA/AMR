@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 이동 임무의 유일한 접수 창구. 관제 명령(host)과 로봇 터미널 개별 시험(manual)을 같은 규칙으로 받는다.
+#       모드(individual/process), 중복 명령, 이동 중 여부를 검사하고 systemd 로 <로봇>-mission 서비스를 띄운다.
+# 실행: backend.py 가 import / 터미널에서 python3 operation.py submit|mode|status|stop|ready|parked / mission.sh·robot.py 가 호출.
+# 호출 관계: mission_entry.sh(임무 본체 시작), manage.sh stop(정지), manage.sh ready(준비), confirm_parked.sh(주차 확인).
+# 저장 파일: data/<로봇>/mission_state.json(현재 임무), commands/<id>.json(명령별 기록), operation_mode.json(모드).
+# ========================================================================
 """One mission admission point for individual tests and host process commands."""
 import argparse
 from contextlib import contextmanager
@@ -15,6 +22,7 @@ STATIONS = {'mat': 'WAREHOUSE', 'asm': 'ASSEMBLY', 'rest': 'WAITING', 'park': 'H
 FINISHED = {'success', 'failed', 'cancelled'}
 
 
+# JSON 파일을 임시 파일에 쓴 뒤 교체 (쓰는 도중 읽어도 깨진 파일이 보이지 않게).
 def atomic_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
@@ -22,13 +30,16 @@ def atomic_json(path, data):
     temp.replace(path)
 
 
+# 명령 ID 형식 검사 (영문/숫자/_.- 1~96자).
 def command_id(value):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,95}', value):
         raise ValueError('command-id는 영문/숫자/밑줄/점/하이픈 1~96자여야 합니다.')
     return value
 
 
+# 한 로봇의 임무 상태·모드·잠금을 다루는 클래스.
 class Operation:
+    # navigation 폴더 이름으로 로봇(burger1/2)을 정하고 data 폴더 경로를 잡는다.
     def __init__(self, here, run=subprocess.run):
         self.here = Path(here).absolute()
         self.robot = self.here.parent.name
@@ -37,6 +48,7 @@ class Operation:
         self.data = self.here.parents[2] / 'data' / self.robot
         self.run = run
 
+    # data/<로봇>/operation.lock 파일 잠금. 여러 프로세스가 동시에 상태를 바꾸지 못하게 한다.
     @contextmanager
     def lock(self):
         self.data.mkdir(parents=True, exist_ok=True)
@@ -44,13 +56,16 @@ class Operation:
             fcntl.flock(f, fcntl.LOCK_EX)
             yield
 
+    # data 폴더의 JSON 파일 읽기 (없으면 기본값).
     def read(self, name, default=None):
         path = self.data / name
         return json.loads(path.read_text()) if path.exists() else default
 
+    # 현재 운용 모드 (individual=로봇 터미널 시험, process=관제 공정).
     def mode(self):
         return self.read('operation_mode.json', {'mode': 'individual'})['mode']
 
+    # systemd 서비스 <로봇>-<unit> 이 실행 중인지 확인.
     def active(self, unit):
         r = self.run(['systemctl', '--user', 'show', f'{self.robot}-{unit}.service', '-p', 'ActiveState', '--value'], capture_output=True, text=True)
         state = r.stdout.strip()
@@ -58,6 +73,7 @@ class Operation:
             raise RuntimeError('서비스 상태를 확인할 수 없습니다: ' + unit)
         return state not in ('inactive', 'failed')
 
+    # 이동 중인지 판단: 임무/도킹/rest 서비스, 이동·준비 잠금 파일, 주행·도킹 프로세스를 모두 본다.
     def busy(self, include_preparation=True):
         if any(self.active(u) for u in ('mission', 'docking', 'rest')):
             return True
@@ -74,10 +90,12 @@ class Operation:
             raise RuntimeError('주행 프로세스를 확인할 수 없습니다.')
         return r.returncode == 0
 
+    # 명령별 기록과 현재 임무 파일을 함께 저장.
     def save_task(self, task):
         atomic_json(self.data / 'commands' / (command_id(task['command_id']) + '.json'), task)
         atomic_json(self.data / 'mission_state.json', task)
 
+    # 현재 임무를 돌려준다. 기록 없이 서비스가 끝났으면 '중단(failed)'으로 고쳐 저장 (자동 재실행 없음).
     def current(self):
         task = self.read('mission_state.json')
         if task and task.get('command_id') and task.get('status') not in FINISHED and not self.active('mission'):
@@ -85,6 +103,7 @@ class Operation:
             self.save_task(task)
         return task
 
+    # 모드 변경 (이동 중에는 거부).
     def set_mode(self, mode):
         if self.busy():
             raise RuntimeError('이동 중에는 모드를 변경할 수 없습니다. stop 후 완료를 확인하세요.')
@@ -92,6 +111,7 @@ class Operation:
         atomic_json(self.data / 'operation_mode.json', {'mode': mode, 'updated_unix': time.time()})
         return {'robot': self.robot, 'mode': mode, 'motion_sent': False}
 
+    # 목적지(mat/asm/rest/park) 임무 접수 → systemd-run 으로 mission_entry.sh 실행. 대기열 없이 한 번에 하나만.
     def submit(self, destination, source='manual', task_id=None):
         if source == 'host' and not task_id:
             raise ValueError('공정 명령에는 command-id가 필요합니다.')
@@ -134,6 +154,7 @@ class Operation:
             raise
         return self.read('commands/' + task_id + '.json')
 
+    # 임무 서비스 정지 + manage.sh stop(모터 idle, 주행/도킹 중단) 후 기록을 '운영자 중단'으로 남긴다.
     def stop(self):
         self.run(['systemctl', '--user', 'stop', self.robot + '-mission.service'], capture_output=True, text=True)
         self.run(['/bin/bash', str(self.here / 'manage.sh'), 'stop'], check=True, capture_output=True, text=True)
@@ -143,6 +164,7 @@ class Operation:
             self.save_task(task)
         return {'robot': self.robot, 'mode': self.mode(), 'task': task, 'busy': self.busy()}
 
+    # 운영자가 '지정 주차 위치에 서 있다'고 확인 → 초기 위치 적용, 다음 주행에서 출차를 한 번 하도록 표시.
     def parked(self):
         runtime = Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp'))
         with (runtime / f'{self.robot}-prepare-{os.getuid()}.lock').open('a') as preparation:
@@ -163,6 +185,7 @@ class Operation:
         return {'robot': self.robot, 'mode': self.mode(), 'localization_ready': True,
                 'departure_pending': True, 'motion_sent': False, 'detail': r.stdout.strip()}
 
+    # manage.sh ready 실행: 위치추정·Nav2·카메라 등을 미리 준비 (움직이지 않음).
     def ready(self):
         if self.busy():
             raise RuntimeError('이동 중에는 준비 명령을 실행할 수 없습니다.')
@@ -174,6 +197,7 @@ class Operation:
                 'elapsed_s': round(time.monotonic()-started, 2), 'detail': r.stdout.strip()}
 
 
+# 터미널 명령 처리: mode / submit / status / stop / parked / ready. 결과는 JSON 한 줄로 출력.
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='action', required=True)

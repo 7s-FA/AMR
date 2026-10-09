@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: colcon --symlink-install 이 상대 링크를 그대로 복사해 깨지는 경우, 설치 폴더의 링크를 올바른 위치로 다시 건다.
+# 실행: build.sh 끝에서 자동 실행.
+# ========================================================================
 """ament may copy relative source links verbatim; re-anchor them at install paths."""
 import os
 from pathlib import Path
 import sys
 
 
+# 설치 폴더를 돌며 깨진 링크를 원본으로 다시 연결.
 def repair(workspace):
     workspace = Path(workspace).absolute()
     repaired = 0

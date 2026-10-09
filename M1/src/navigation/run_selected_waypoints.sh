@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: 목적지 이름(mat/asm/rest/park 등)으로 경로 파일을 만들고 웨이포인트 주행 실행.
+#       출차 표시(departure_pending)가 있으면 엔코더 후진+180도 회전 인자를 붙이고, 관제 명령이면 재시도 인자를 붙인다.
+#       시작 전 이동 잠금·준비(warm.sh)·카메라·모드 nav, 끝나면 모드 idle. 로그: data/<로봇>/motion_diagnostics/.
+# 호출: sequence_runner.py (경로 단계). --dry-run 은 경로만 출력.
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

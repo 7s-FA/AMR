@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 도킹 대기 작업자. 카메라 검출(일반 도킹·주차 두 보드)을 미리 띄워 두고, 요청이 오면 바로 DockingNode 를 만들어 도킹한다.
+#       대기 중에는 모터·GPIO 를 잡지 않는다. 카메라는 대기 2fps, 도킹 15fps.
+# 실행: <로봇>-docking-ready.service → start_docking_standby.sh → docking_standby.py (ensure_docking_ready.sh 가 켬)
+# 호출 관계: docking_warm_client.py 가 소켓($XDG_RUNTIME_DIR/<로봇>-docking-ready.sock)으로 start/prepare/profile/status 요청.
+# 부하: 대기 루프 0.05초 주기 (2026-10-09 최적화).
+# ========================================================================
 """Persistent, robot-scoped vision for normal docking and parking; no idle motor/GPIO ownership."""
 import argparse, hashlib, json, os, select, signal, socket, time, queue
 from pathlib import Path
 
 
+# 설정·보드·보정·도킹 코드 파일들의 해시. 바뀌면 재시작 전까지 도킹을 거부한다.
 def signature(cfg_path, configurations):
     paths = {Path(cfg_path)}
     for cfg in configurations.values():
@@ -14,6 +22,7 @@ def signature(cfg_path, configurations):
     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
 
 
+# 요청 형식과 2초 이내 요청인지 확인 (오래된 요청은 실행 안 함).
 def validate_request(req, now):
     if req.get('action') not in ('start', 'prepare', 'profile') or not isinstance(req.get('issued'), (int, float)):
         raise ValueError('Invalid docking request')
@@ -21,11 +30,13 @@ def validate_request(req, now):
         raise ValueError('Expired docking request; not executed')
 
 
+# 요청한 쪽 연결이 끊겼는지 확인 (끊기면 도킹 중단).
 def disconnected(conn):
     readable, _, _ = select.select([conn], [], [], 0)
     return bool(readable) and conn.recv(1, socket.MSG_PEEK) == b''
 
 
+# 모드 전환 후 새 보드 기준 최신 검출 3장이 연속으로 나올 때까지 대기 (최대 5초).
 def wait_fresh(vision, cfg, timeout=5.0):
     # A pre-switch detection can never satisfy readiness for the new board.
     vision.set_active(False)
@@ -52,6 +63,7 @@ def wait_fresh(vision, cfg, timeout=5.0):
             'mode': cfg['docking_mode'], 'target_ids': cfg['target_ids']}
 
 
+# 설정 로드 → 통신 감시·카메라 검출 시작 → 소켓 대기 → 요청별 처리(상태/카메라 속도/준비/도킹).
 def main():
     p=argparse.ArgumentParser();p.add_argument('--config', required=True)
     p.add_argument('--robot', choices=('burger1', 'burger2'), required=True)
@@ -75,14 +87,17 @@ def main():
     sig = signature(a.config, configurations)
     path = Path(os.environ.get('XDG_RUNTIME_DIR', '/run/user/'+str(os.getuid()))) / (a.robot+'-docking-ready.sock')
     manifest=path.with_suffix('.json');server=vision=node=gpio=probe=guard=None
+    # 종료 신호 → KeyboardInterrupt.
     def interrupted(*_): raise KeyboardInterrupt
     signal.signal(signal.SIGINT, interrupted);signal.signal(signal.SIGTERM, interrupted)
     rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
     owner={'mode': None, 'at': 0.}
     try:
         probe=Node('docking_standby_probe', namespace='/'+a.robot)
+        # motion_owner/status 수신: 현재 모터 주인 기록.
         def mode(m): owner.update(mode=m.data, at=time.monotonic())
         probe.create_subscription(String, 'motion_owner/status', mode, 1)
+        # 카메라 속도(active=15fps / idle=2fps) 전환 요청.
         def profile(value):
             if value not in ('active', 'idle'): raise ValueError('Invalid camera profile')
             report=native_camera_profile(a.robot,value)
@@ -98,7 +113,9 @@ def main():
                                        'available_modes': list(configurations)}))
         print('Docking standby: normal + parking vision warming; NO motor/GPIO ownership', flush=True)
         while rclpy.ok():
-            rclpy.spin_once(probe, timeout_sec=.01)
+            # 대기 중에는 0.05초마다 깨어나 접속을 확인한다 (예전 0.01초 → 깨어나는 횟수 1/5).
+            # 도킹 시작 직전에는 아래에서 0.15초 동안 따로 상태를 새로 받으므로 반응성은 같다.
+            rclpy.spin_once(probe, timeout_sec=.05)
             try: conn, _=server.accept()
             except BlockingIOError: continue
             with conn:

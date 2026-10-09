@@ -1,3 +1,8 @@
+// ========================================================================
+// 역할: Nav2 Spin 동작을 확장한 회전 플러그인 (우리 코드).
+//       PrecisionSpin: 최종 각도 맞출 때 마지막 15도를 천천히 돈다. DepartureSpin: 출차 180도 회전 (별도 속도 상한·충돌 검사).
+//       Nav2 가 behavior_server 안에서 불러 쓴다 (precision_behaviors.xml, nav2.yaml 의 behavior_server 설정).
+// ========================================================================
 // Precision speed envelope around Nav2's Spin. Nav2 retains TF, timeout,
 // cancellation, collision checking, command publication and stop handling.
 #include "nav2_behaviors/plugins/spin.hpp"

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: 운영자가 '로봇이 자기 주차 자리에 멈춰 있다'고 확인할 때 실행. 초기 위치 적용(warm.sh --force-parked) 후
+#       출차 표시(departure_pending)를 만들어 다음 주행에서 출차를 한 번 하게 한다. 호출: operation.py parked.
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

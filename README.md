@@ -23,6 +23,7 @@ M1(기존 Burger1), M2(기존 Burger2) **로봇 내부에서 실행하는 코드
 
 호스트의 웹·공정 스케줄러·운영 Action Client는 별도 [host_pc 저장소](https://github.com/7s-FA/host_pc)에서 관리합니다. 이 저장소의 작업 브랜치는 `jh`이며, F1(와플)·M3의 기존 영역은 유지합니다.
 
+- **[코드 안내 (우리 코드·원본 구분, 2026-10-09 정리·최적화 내역)](docs/code_guide_2026-10-09.md)**
 - [로봇 구분과 동작 흐름](#로봇-구분과-동작-흐름)
 - [파일 구조와 수정 위치](#파일-구조와-수정-위치)
 - [명세서와 통신 규약](#명세서와-통신-규약)
@@ -132,7 +133,6 @@ AMR/
 │   │   ├── factory_map.pgm
 │   │   └── factory_map.yaml
 │   ├── runtime_env/
-│   │   ├── burger1_remote.bash
 │   │   ├── pc_burger1_env.bash
 │   │   └── pc_env.bash
 │   ├── src/
@@ -146,8 +146,6 @@ AMR/
 │   │   │   ├── manage.sh
 │   │   │   ├── mission_entry.sh
 │   │   │   ├── mission_retry.json
-│   │   │   ├── operator_aliases.bash
-│   │   │   ├── performance_topics.cpp
 │   │   │   ├── rest_ready_worker.py
 │   │   │   ├── retry_ready.py
 │   │   │   ├── run_rest.sh
@@ -171,7 +169,6 @@ AMR/
 │   │   │   ├── start_docking.sh
 │   │   │   ├── start_docking_engine.sh
 │   │   │   ├── start_docking_standby.sh
-│   │   │   ├── start_ir.sh
 │   │   │   ├── test_docking_control.py
 │   │   │   ├── test_docking_node.py
 │   │   │   ├── test_docking_recorder.py
@@ -196,7 +193,6 @@ AMR/
 │   │   ├── factory_map.pgm
 │   │   └── factory_map.yaml
 │   ├── runtime_env/
-│   │   ├── burger2_remote.bash
 │   │   ├── pc_burger2_env.bash
 │   │   └── pc_env.bash
 │   ├── src/
@@ -210,9 +206,6 @@ AMR/
 │   │   │   ├── manage.sh
 │   │   │   ├── mission_entry.sh
 │   │   │   ├── mission_retry.json
-│   │   │   ├── motion_trace.py
-│   │   │   ├── operator_aliases.bash
-│   │   │   ├── performance_topics.cpp
 │   │   │   ├── rest_ready_worker.py
 │   │   │   ├── retry_ready.py
 │   │   │   ├── run_rest.sh
@@ -236,7 +229,6 @@ AMR/
 │   │   │   ├── start_docking.sh
 │   │   │   ├── start_docking_engine.sh
 │   │   │   ├── start_docking_standby.sh
-│   │   │   ├── start_ir.sh
 │   │   │   ├── test_docking_control.py
 │   │   │   └── test_docking_node.py
 │   │   └── .gitkeep
@@ -258,7 +250,6 @@ AMR/
 │   │   ├── docking_config.py
 │   │   ├── generate_station_boards.py
 │   │   ├── source.py
-│   │   ├── viewer.py
 │   │   └── vision.py
 │   ├── navigation/
 │   │   ├── action_gate.py
@@ -280,16 +271,12 @@ AMR/
 │   │   ├── nav_control_service.sh
 │   │   ├── nav_env.bash
 │   │   ├── operation.py
-│   │   ├── performance_probe.py
 │   │   ├── ready_monitor.py
 │   │   ├── ready_parallel.py
 │   │   ├── ready_watch.sh
 │   │   ├── rest.sh
 │   │   ├── rest_forward.py
-│   │   ├── retry_ready.py
-│   │   ├── run_waypoints_record.sh
 │   │   ├── sequence_runner.py
-│   │   ├── start_nav2.sh
 │   │   ├── startup_state.py
 │   │   ├── station_routes.py
 │   │   ├── terminal_evidence.py
@@ -300,8 +287,6 @@ AMR/
 │   │   └── nav2_network.bash
 │   ├── runtime/
 │   │   ├── camera_ipc.py
-│   │   ├── communication_guard.py
-│   │   ├── data_flow.py
 │   │   ├── docking_control.py
 │   │   ├── docking_network.py
 │   │   ├── docking_node.py
@@ -333,10 +318,7 @@ AMR/
 │           │   └── navigate_reverse.xml
 │           ├── config/
 │           │   ├── arrival_tuning.py
-│           │   ├── mapper_params.yaml
-│           │   ├── nav2_burger_params.yaml
-│           │   ├── nav2_params.yaml
-│           │   └── waypoints.yaml
+│           │   └── nav2_burger_params.yaml
 │           ├── include/
 │           │   └── waffle_navigation/
 │           │       ├── position_approach.hpp
@@ -346,17 +328,12 @@ AMR/
 │           │   ├── burger1_navigation.launch.py
 │           │   ├── burger2_navigation.launch.py
 │           │   ├── lean_bringup_launch.py
-│           │   ├── lean_navigation_launch.py
-│           │   ├── map_building.launch.py
-│           │   ├── map_view.launch.py
-│           │   └── navigation2.launch.py
+│           │   └── lean_navigation_launch.py
 │           ├── rviz/
 │           │   ├── burger1_navigation.rviz
-│           │   ├── burger2_navigation.rviz
-│           │   └── map_building.rviz
+│           │   └── burger2_navigation.rviz
 │           ├── scripts/
 │           │   ├── nav2_waypoints.py
-│           │   ├── normalize_scan.py
 │           │   └── save_start_pose.py
 │           ├── src/
 │           │   ├── position_approach_critic.cpp
@@ -432,8 +409,6 @@ AMR/
 │   ├── materialize.py
 │   ├── repair_install_links.py
 │   ├── robot.py
-│   ├── start_burger1.sh
-│   ├── start_burger2.sh
 │   └── update_manifest.py
 ├── systemd/
 │   ├── M1/
@@ -459,11 +434,6 @@ AMR/
 │   ├── test_single_folder.py
 │   └── test_synced_docking.py
 ├── tools/
-│   ├── legacy_camera/
-│   │   ├── M1/
-│   │   │   ├── camera_node.py
-│   │   │   └── test_camera_node.py
-│   │   └── README.md
 │   └── test_host/
 │       ├── README.md
 │       ├── build.sh

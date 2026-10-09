@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: 목적지별 경로 정의 (어느 웨이포인트를 어떤 순서·방향으로 지나는지, 종단 동작 dock/park/rest).
+#       실행 위치 이름: navigation/station_routes.yaml. 사용처: station_routes.py, sequence_runner.py.
+# ========================================================================
 # Coordinates use canonical waypoints; headings are degrees.
 # Parking yaw 180 inferred from saved parking poses; ArUco aligns finally.
 variants:

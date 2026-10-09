@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 관제 없이 로봇 액션을 시험하는 작은 클라이언트 (PC 또는 로봇에서 'M2 asm', 'M1 park' 처럼 한 건씩 보냄).
+# 실행: tools/test_host/run.sh (build.sh 로 Burger 액션 인터페이스 빌드 후).
+# ========================================================================
 """Small standalone Burger Action client; no SSH or direct velocity commands."""
 import argparse
 import json
@@ -10,6 +14,7 @@ COMMANDS = {'mat': 'GO_TO_MAT', 'asm': 'GO_TO_ASM', 'rest': 'GO_TO_REST',
             'park': 'GO_TO_PARK', 'stop': 'EMER_STOP', 'restart': 'RESTART'}
 
 
+# 명령행 → (로봇, 명령, 속도) 해석.
 def request_values(robot, command, speed):
     if robot not in ('M1', 'M2'):
         raise ValueError('Robot must be M1 or M2')
@@ -23,6 +28,7 @@ def request_values(robot, command, speed):
     return '/' + robot + '/data', command, speed if command.startswith('GO_TO_') else 0.
 
 
+# 액션 서버 연결 → 목표 전송 → 피드백 출력 → 결과 출력.
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('robot', choices=['M1', 'M2'])
@@ -42,6 +48,7 @@ def main(argv=None):
     from std_msgs.msg import String
     from host_pkg.action import Burger
     interrupted = False
+    # Ctrl+C 시 취소 요청.
     def interrupt(*_):
         nonlocal interrupted
         interrupted = True
@@ -51,6 +58,7 @@ def main(argv=None):
     client = ActionClient(node, Burger, '/' + args.robot + '/data')
     node.create_subscription(String, '/' + args.robot + '/mission/diagnostics',
                              lambda msg: print('상태: ' + msg.data, flush=True), 10)
+    # future 완료 대기.
     def wait(future, seconds):
         end = time.monotonic() + seconds
         while rclpy.ok() and not future.done() and time.monotonic() < end:
@@ -71,6 +79,7 @@ def main(argv=None):
             return 130
         goal = Burger.Goal(); goal.command = command; goal.cmd_val = speed
         last_feedback = 0.
+        # 피드백(x, y, 방향) 출력.
         def feedback(msg):
             nonlocal last_feedback
             if time.monotonic() - last_feedback < 1.:

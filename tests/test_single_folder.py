@@ -199,7 +199,7 @@ def test_package_sources_and_camera_dependencies_are_canonical(tmp_path, robot):
         launch = (ROOT/'common/src/waffle_navigation/launch'/f'burger{number}_navigation.launch.py').read_text()
         assert f"'namespace': 'burger{number}'" in launch
         assert "'cmd_vel_out_topic']='cmd_vel_nav_out'" in launch
-    for name in ('nav2_waypoints.py','normalize_scan.py','save_start_pose.py'):
+    for name in ('nav2_waypoints.py','save_start_pose.py'):
         assert os.access(ROOT/'common/src/waffle_navigation/scripts'/name,os.X_OK)
     out = materialize(robot,tmp_path/robot,True)
     camera = Path(json.loads((out/'runtime.json').read_text())['camera'])

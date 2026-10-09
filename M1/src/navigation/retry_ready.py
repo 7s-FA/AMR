@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 재시도 전 확인 (읽기 전용). 명령 권한이 아직 유효한지, 최신 odom 으로 정지했는지, 모터 토크·지도 위치가 정상인지 본다.
+#       위치를 새로 넣거나 모터를 움직이지 않는다.
+# 실행: sequence_runner.py 의 recover() 가 단계 실패 후 재시도 직전에 실행.
+# 사용처: sequence_runner.py 가 authorization() 을 import (재시도 권한 확인).
+# ========================================================================
 """Bounded, read-only recovery check. No pose seeding, GPIO or velocity publisher."""
 import os
 import argparse
@@ -9,6 +15,7 @@ from pathlib import Path
 from mission_retry import RetryCancelled
 
 
+# 재시도 권한: 같은 명령 ID 이고 정지 래치가 없어야 한다 (개별 시험은 래치만 확인).
 def authorization(data, task_id, source, now=None):
     from action_gate import load_gate
     gate = load_gate(Path(data)/'action_gate.json')
@@ -21,6 +28,7 @@ def authorization(data, task_id, source, now=None):
     return gate.get('goal_id') == task_id
 
 
+# 제한 시간 안에 권한·정지·토크·모드 idle·지도 위치를 확인 (도킹 단계면 IR 도 확인).
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--robot', choices=['burger1'], required=True)
@@ -41,9 +49,11 @@ def main():
     buffer = Buffer(); listener = TransformListener(buffer, node, spin_thread=False)
     last = {}; stopped = [None]; stamp_ns = [-1]
 
+    # 메시지 나이(초).
     def age(stamp):
         return (node.get_clock().now().nanoseconds-stamp.sec*10**9-stamp.nanosec)/1e9
 
+    # odom 수신: 정지 유지 시각 갱신.
     def odom(msg):
         ns = msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
         now = time.monotonic(); v, w = msg.twist.twist.linear.x, msg.twist.twist.angular.z
@@ -56,10 +66,12 @@ def main():
             if stopped[0] is None: stopped[0] = now
         else: stopped[0] = None
 
+    # sensor_state 수신: 토크 기록.
     def motor(msg):
         if -.1 <= age(msg.header.stamp) <= .5:
             last['motor'] = time.monotonic(); last['torque'] = bool(msg.torque)
 
+    # motion_owner/status 수신: 모드 기록.
     def owner(msg):
         last['owner'] = time.monotonic(); last['mode'] = msg.data
 

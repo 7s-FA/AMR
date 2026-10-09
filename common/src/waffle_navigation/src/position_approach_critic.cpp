@@ -1,3 +1,7 @@
+// ========================================================================
+// 역할: Nav2 DWB 평가 플러그인 PositionApproachCritic (우리 코드). 웨이포인트에 '위치만' 맞춰 접근 (각도는 나중에 회전으로).
+//       정지 또는 실제로 바퀴가 도는 최소 전진 속도만 허용. 계산은 position_approach.hpp.
+// ========================================================================
 #include "waffle_navigation/position_approach.hpp"
 #include "dwb_core/trajectory_critic.hpp"
 #include "dwb_core/exceptions.hpp"

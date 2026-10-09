@@ -1,3 +1,6 @@
+# ========================================================================
+# 역할: 관제 준비 작업자 서비스 (start_host_ready.sh). 실제 실행 경로는 materialize/install-services 가 바꿔 넣는다.
+# ========================================================================
 [Unit]
 Description=burger1 persistent host readiness (no motion goals)
 After=network.target

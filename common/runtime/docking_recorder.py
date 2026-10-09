@@ -1,3 +1,8 @@
+# ========================================================================
+# 역할: 도킹 1회의 진단 기록기. 설정·코드 사본과 이벤트(JSONL)를 data/<로봇>/docking_logs/<시각>/ 에 비동기로 쓴다.
+#       제어 콜백에서는 큐에 넣기만 하고, 디스크 쓰기는 별도 스레드가 한다.
+# 사용처: docking_standby.py / docking_node.py (요청에 log_dir 이 있을 때).
+# ========================================================================
 """Bounded, asynchronous diagnostics; disk writes never run in control callbacks."""
 import hashlib
 import json
@@ -8,7 +13,9 @@ import threading
 import time
 
 
+# 도킹 진단 기록 클래스.
 class DockingRecorder:
+    # 폴더 생성, 설정·코드 파일 사본과 해시 저장, 쓰기 스레드 시작.
     def __init__(self, directory, config, sources=()):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -31,6 +38,7 @@ class DockingRecorder:
         self.worker = threading.Thread(target=self._write, daemon=True)
         self.worker.start()
 
+    # 이벤트 1개를 큐에 넣는다 (꽉 차면 버리고 개수만 센다).
     def record(self, kind, data):
         if kind == 'status':
             self.last_status = dict(data)
@@ -40,6 +48,7 @@ class DockingRecorder:
         except queue.Full:
             self.dropped += 1
 
+    # 쓰기 스레드: 큐 → events.jsonl.
     def _write(self):
         try:
             while not self.stopping.is_set() or not self.queue.empty():
@@ -53,6 +62,7 @@ class DockingRecorder:
         finally:
             self.output.close()
 
+    # 기록 종료 후 요약(summary.json) 저장.
     def close(self, exit_reason):
         self.stopping.set()
         self.worker.join(timeout=2)

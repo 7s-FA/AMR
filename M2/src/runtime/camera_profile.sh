@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: 카메라 속도 전환 (active=도킹 15fps / idle=대기 2fps). 카메라 프로세스는 유지한 채 설정만 바꾼다.
+# 호출: start_docking.sh (시작 시 active, 끝나면 idle).
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

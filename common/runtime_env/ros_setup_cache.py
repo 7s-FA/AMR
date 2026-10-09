@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: ROS 환경 설정(setup.bash 여러 개)을 한 번 실행한 결과를 캐시 파일로 저장 → 다음부터 빠르게 source.
+#       설치 파일이 바뀌면(빌드 후) 캐시 이름이 바뀌어 자동으로 새로 만든다. 네트워크 설정은 캐시하지 않는다.
+# 실행: ros_setup_fast.bash 가 호출해 캐시 파일 경로를 받는다.
+# ========================================================================
 """Cache only ROS setup variables; never cache networking or credentials."""
 import fcntl, hashlib, os, shlex, subprocess, sys
 from pathlib import Path

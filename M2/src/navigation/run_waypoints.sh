@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: nav2_waypoints 실행기. 대기 작업자(waypoint_client)를 먼저 쓰고, 요청을 못 보냈을 때(코드 2)만 직접 실행.
+# 호출: run_selected_waypoints.sh, sequence_runner.py(도킹 재시도 후진).
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

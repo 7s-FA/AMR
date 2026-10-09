@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: 도킹·REST 설정 (토픽 이름, 마커 보드, 카메라 보정 경로, 정렬·직진 제어값, IR 핀, 네트워크 인터페이스, rest_control).
+# 사용처: docking_standby/docking_node(docking_control), rest_forward, docking_network.py 등.
+# ========================================================================
 board_file: docking_board.yaml
 parking_board_file: parking_board.yaml
 parking_control:
