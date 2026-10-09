@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 위치추정(map_server·AMCL) 준비 확인. 부팅 후 처음이면 '내 주차 자리' 자세를 AMCL 초기 위치로 한 번 넣는다.
+#       이미 이 부팅·이 프로세스에서 확인했다면 바로 끝낸다 (data/<로봇>/localization_ready.json).
+# 실행: warm.sh 끝부분에서 python3 check_ready.py burgerN [--force-parked] (--force-parked 는 confirm_parked.sh 경로)
+# 호출 관계: localization_ready.ensure_active(복구 판단), startup_state.wait_response(응답 대기).
+# ========================================================================
 """Activate localization; once per boot seed the confirmed own parking pose."""
 import argparse,time,json,math,subprocess,fcntl
 from collections import deque
@@ -6,13 +12,16 @@ from startup_state import wait_response,wait_responses
 from localization_ready import ensure_active
 from pathlib import Path
 
+# JSON 임시 파일→교체 저장.
 def atomic(path,data):
  path.parent.mkdir(parents=True,exist_ok=True);temp=path.with_suffix('.tmp');temp.write_text(json.dumps(data,ensure_ascii=False));temp.replace(path)
+# localization 서비스 PID·부팅 ID 로 재확인 필요 여부 판단 → lifecycle 확인/복구 → 필요하면 주차 자세로 초기 위치 설정 → 최신 지도 위치 확인 후 기록.
 def main():
  p=argparse.ArgumentParser();p.add_argument('robot');p.add_argument('--force-parked',action='store_true');a=p.parse_args()
  root=Path(__file__).absolute().parents[3];data=root/'data'/a.robot;boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
  pid=subprocess.check_output(['systemctl','--user','show',a.robot+'-localization.service','-p','MainPID','--value'],text=True).strip()
  ready=data/'localization_ready.json';seed=data/'localization_seed.json'
+ # JSON 파일 읽기 (실패 시 빈 사전).
  def read(path):
   try:return json.loads(path.read_text())
   except (OSError,ValueError):return {}
@@ -25,13 +34,16 @@ def main():
  from tf2_ros import Buffer,TransformListener
  rclpy.init(args=['--ros-args','-r','/tf:=/'+a.robot+'/tf','-r','/tf_static:=/'+a.robot+'/tf_static']);n=rclpy.create_node('station_ready_check',namespace='/'+a.robot)
  ack=deque(maxlen=16)
+ # amcl_pose 수신 기록 (초기 위치 적용 확인용).
  def on_pose(m):ack.append((time.monotonic(),m.pose.pose))
  n.create_subscription(PoseWithCovarianceStamped,'amcl_pose',on_pose,10)
  clients={name:n.create_client(GetState,name+'/get_state') for name in ('map_server','amcl')}
  manager=n.create_client(Trigger,'lifecycle_manager_localization/is_active')
  control=n.create_client(ManageLifecycleNodes,'lifecycle_manager_localization/manage_nodes')
  buf=Buffer();listener=TransformListener(buf,n,spin_thread=False)
+ # ROS 콜백 한 번 처리.
  def spin(timeout):rclpy.spin_once(n,timeout_sec=timeout)
+ # map_server·amcl 의 lifecycle 상태를 동시에 조회.
  def query(timeout):
   end=time.monotonic()+timeout;pending={}
   try:
@@ -46,7 +58,9 @@ def main():
   finally:
    for name,future in pending.items():
     if not future.done():clients[name].remove_pending_request(future);future.cancel()
+ # lifecycle_manager_localization 이 활성인지 조회.
  def manager_active(timeout):return wait_response(manager,Trigger.Request(),spin,timeout,'localization manager state').success
+ # 이번 localization 실행 로그에 '전체 기동 실패(Aborting bringup)'가 있었는지 확인.
  def failed_bringup():
   unit=a.robot+'-localization.service'
   invocation=subprocess.check_output(['systemctl','--user','show',unit,'-p','InvocationID','--value'],text=True,timeout=3).strip()
@@ -55,6 +69,7 @@ def main():
   aborted=log.rfind('Failed to bring up all requested nodes. Aborting bringup.')
   progressing=max(log.rfind('Starting managed nodes bringup...'),log.rfind('Resuming managed nodes...'),log.rfind('Managed nodes are active'))
   return aborted>=0 and aborted>progressing
+ # 명시적으로 실패한 경우에만 localization 서비스를 재시작해 복구 (로봇이 멈춰 있을 때만).
  def recover(command,timeout):
   if command=='restart':
    # The uniform manager operations cannot resume a partially active stack.
@@ -73,6 +88,7 @@ def main():
   request=ManageLifecycleNodes.Request();request.command=request.RESUME if command=='resume' else request.STARTUP
   reply=wait_response(control,request,spin,timeout,'localization recovery')
   if not reply.success:raise RuntimeError('localization manager rejected '+command)
+ # map→base_footprint TF 가 1초 이내로 최신이면 돌려준다.
  def fresh_pose():
   try:
    t=buf.lookup_transform(a.robot+'/map',a.robot+'/base_footprint',rclpy.time.Time())

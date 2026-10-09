@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: 4마커 도킹 보드의 형상 정의와 자세 추정 (카메라 기준 보드 위치·각도).
+# 사용처: docking_vision_worker.py(BoardDetector), docking_config.py, generate_station_boards.py, cli.py.
+# ========================================================================
 """Joint pose of a measured planar four-marker docking board (no motion commands)."""
 from pathlib import Path
 import math
@@ -9,9 +13,11 @@ import yaml
 from .vision import MarkerFinder, dictionary, positive
 
 
+# 보드 정의: 원점=도킹 중심, x 오른쪽, y 위, z 보드 밖. 마커 ID·크기·위치.
 class DockingBoard:
     """Origin is the desired docking center; x right, y up, z out of board."""
 
+    # 보드 사양(마커 목록) 검사·저장.
     def __init__(self, data):
         if not isinstance(data, dict) or not isinstance(data.get('dictionary'), str):
             raise ValueError('Board dictionary must be specified')
@@ -58,11 +64,13 @@ class DockingBoard:
         self.lateral_tolerance = positive(float(data.get('lateral_tolerance_m', .005)), 'lateral tolerance')
         self.yaw_tolerance = math.radians(positive(float(data.get('yaw_tolerance_deg', 2)), 'yaw tolerance'))
 
+    # 보드 YAML 파일 읽기.
     @classmethod
     def load(cls, path):
         return cls(yaml.safe_load(Path(path).read_text()))
 
 
+# 자세(rvec/tvec)를 관측 사전 항목으로 변환.
 def pose_fields(rvec, tvec):
     rotation, _ = cv2.Rodrigues(rvec)
     normal = rotation[:, 2]
@@ -71,6 +79,7 @@ def pose_fields(rvec, tvec):
             'normal_yaw_rad': math.atan2(-float(normal[0]), -float(normal[2]))}
 
 
+# 마커 코너들로 보드 자세 계산 (solvePnP).
 def fit_pose(objects, images, calibration):
     matrix, distortion, _ = calibration
     ok, rvec, tvec = cv2.solvePnP(objects, images, matrix, distortion,
@@ -86,7 +95,9 @@ def fit_pose(objects, images, calibration):
     return rvec, tvec, residual
 
 
+# 한 이미지에서 보드 마커를 찾고 자세를 계산하는 검출기.
 class BoardDetector:
+    # 보드·카메라 보정값 설정.
     def __init__(self, board, calibration):
         if calibration is None:
             raise ValueError('Four-marker joint pose requires camera calibration')
@@ -94,6 +105,7 @@ class BoardDetector:
         self.calibration = calibration
         self.finder = MarkerFinder(board.dictionary_name)
 
+    # 이미지 1장 처리 → (관측 사전, 주석 그린 이미지).
     def detect(self, frame):
         h, w = frame.shape[:2]
         if self.calibration[2] != (w, h):
@@ -116,6 +128,7 @@ class BoardDetector:
         cv2.drawMarker(output, center, (0, 255, 255), cv2.MARKER_CROSS, 28, 1, cv2.LINE_AA)
         return result, output
 
+    # 찾은 마커들로 보드 자세 추정 (마커 순서와 무관).
     def estimate(self, corners, ids):
         """Accept canonical corner order, regardless of marker detection ordering."""
         if len(corners) != len(ids):

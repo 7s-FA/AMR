@@ -1,4 +1,8 @@
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: 이동 시작 전 잠금 확인 함수(mission_guard). 준비 중이거나 다른 임무가 돌고 있으면 거부한다.
+#       같은 임무(토큰 일치)의 하위 단계는 통과. 사용처: manage.sh, rest.sh, run_selected_waypoints.sh, confirm_parked.sh.
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

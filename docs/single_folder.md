@@ -88,7 +88,6 @@ python3 scripts/robot.py --robot M1 host-ready --parked
 `--parked`는 초기 위치를 적용합니다. 중간 위치에서는 사용하지 말고 RViz에서 현재 자세를 먼저 지정합니다.
 `host-ready`는 준비·토크 활성화·RESTART를 수행하지만 이동 목적지 Goal을 보내지 않습니다.
 실패하면 원인을 해결하고 재실행합니다. 화면에 서비스 active만 보인다고 준비 성공으로 판단하지 않습니다.
-`scripts/start_burger1.sh`, `start_burger2.sh`도 이 준비 명령으로 연결됩니다.
 
 로컬 시험은 진행 중 작업 종료 및 Action 서비스 종료 후 개별 모드로 전환합니다.
 정지 래치는 상태 파일을 편집해 우회하지 않습니다. `stop`은 로컬 중단이며 Host의 `EMER_STOP`과 구분합니다.

@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: AMR 폴더 하나로 로봇을 설정·빌드·운용하는 진입점. configure/build/camera-build/install-services/doctor 와
+#       host-ready/ready/parked/status/stop/mode/mat/asm/rest/park/action 명령을 해당 스크립트로 넘긴다.
+# 실행: python3 scripts/robot.py --robot M1 <명령> (버거2는 M2). 설정 명령은 주행을 시작하지 않는다.
+# ========================================================================
 """One-folder entry point. Setup never starts robot services or sends motion goals."""
 import argparse
 from datetime import datetime
@@ -10,6 +15,7 @@ import sys
 from materialize import ROOT, materialize
 
 
+# 실행 폴더의 runtime.json 을 읽고 옮겨진 폴더가 아닌지 확인.
 def configuration(robot, runtime=None):
     runtime = Path(runtime).resolve() if runtime else ROOT/'.runtime'/robot
     config = json.loads((runtime/'runtime.json').read_text())
@@ -18,6 +24,7 @@ def configuration(robot, runtime=None):
     return runtime, config
 
 
+# 명령 실행용 환경 변수 (AMR 경로, ROS 도메인 40, PYTHONPATH).
 def environment(config):
     return dict(os.environ, AMR_WORKSPACE=config['workspace'], AMR_CAMERA=config['camera'],
                 AMR_ROBOT=config['runtime_robot'], BURGER_PROJECT_ROOT=config['workspace'],
@@ -25,6 +32,7 @@ def environment(config):
                 PYTHONPATH=os.pathsep.join([config['navigation'],config['camera'],os.environ.get('PYTHONPATH','')]))
 
 
+# 로봇 서비스·주행 프로세스가 모두 멈췄는지 확인 (서비스 교체 전).
 def stopped(robot):
     name = 'burger'+robot[-1]
     result = subprocess.run(['systemctl','--user','list-units','--all','--no-legend','--plain',
@@ -41,6 +49,7 @@ def stopped(robot):
         raise RuntimeError('Could not verify robot processes')
 
 
+# 생성된 systemd 유닛을 ~/.config/systemd/user 에 등록 (다르면 백업 후 교체).
 def install_units(robot, runtime, config, replace=False):
     dest = Path.home()/'.config/systemd/user'
     units = list(Path(config['units']).glob('*.service'))
@@ -61,6 +70,7 @@ def install_units(robot, runtime, config, replace=False):
     print('Services registered. Nothing started; no goals sent.')
 
 
+# 명령 분기.
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     target = p.add_mutually_exclusive_group(required=True)

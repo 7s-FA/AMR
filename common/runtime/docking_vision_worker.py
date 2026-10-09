@@ -1,8 +1,14 @@
+# ========================================================================
+# 역할: 로봇 내부 영상 처리 프로세스. 공유메모리 카메라 프레임에서 ArUco 4마커 보드를 찾아 관측을 큐로 넘긴다.
+#       (선택) 미리보기 영상 HTTP 서버. docking.yaml 의 vision.preview_enabled=false 면 띄우지 않는다.
+# 사용처: docking_standby.py 가 LocalVision 을 만든다. 관제 PC 를 거치지 않는다.
+# ========================================================================
 """Robot-local vision worker; control observations never traverse the host PC."""
 import queue
 import time
 
 
+# 큐에 최신 값만 남긴다 (꽉 차 있으면 오래된 것을 버리고 넣기).
 def put_latest(channel, value):
     try:
         channel.put_nowait(value)
@@ -17,6 +23,7 @@ def put_latest(channel, value):
             pass
 
 
+# 미리보기 큐에 넣기 (꽉 차면 버림, 검출을 막지 않음).
 def put_preview(frames, value):
     # Never drain a large multiprocessing pipe in the control-data producer.
     # A stalled viewer may lose display frames, but cannot block detection.
@@ -26,6 +33,7 @@ def put_preview(frames, value):
         pass
 
 
+# 미리보기 프로세스: 주석 그린 프레임을 JPEG 로 HTTP(8085) 제공.
 def run_preview(config, frames, stop):
     import cv2
     from video_http import LatestVideo, serve
@@ -44,6 +52,7 @@ def run_preview(config, frames, stop):
     finally:server.shutdown();server.server_close()
 
 
+# 검출 프로세스: 프레임 읽기 → 보드 자세 계산 → 관측 큐로 전달. 대기 중에는 0.5초에 한 번만 검출.
 def run_vision(config, channel, frames, stop, progress=None, active=None, mode_index=None, configurations=None):
     import cv2
     from docking_vision.board import BoardDetector, DockingBoard
@@ -61,7 +70,8 @@ def run_vision(config, channel, frames, stop, progress=None, active=None, mode_i
         sequence, last_preview, last_detection = 0, float('-inf'), float('-inf')
         while not stop.is_set():
             try:
-                frame, metadata = source.read(.2)
+                # 대기(저속 2fps) 중에는 새 프레임 확인 간격을 0.05초로 늘려 CPU를 아낀다 (도킹 중 0.005초).
+                frame, metadata = source.read(.2, .005 if active is None or active.is_set() else .05)
             except RuntimeError:
                 # Controller's local freshness watchdog stops on missing camera data.
                 continue
@@ -101,7 +111,9 @@ def run_vision(config, channel, frames, stop, progress=None, active=None, mode_i
             source.close()
 
 
+# 검출 프로세스(와 미리보기)를 띄우고 모드·속도를 제어하는 클래스.
 class LocalVision:
+    # spawn 프로세스·큐·공유 값 생성 후 시작.
     def __init__(self, config, modes=None):
         import multiprocessing as mp
         ctx = mp.get_context('spawn')
@@ -124,6 +136,7 @@ class LocalVision:
         if self.preview is not None:
             self.preview.start()
 
+    # 검출할 보드(normal/parking) 전환, 이전 관측은 비운다.
     def set_mode(self, mode):
         if mode not in self.mode_names:
             raise ValueError('Vision mode was not preloaded: '+mode)
@@ -133,9 +146,11 @@ class LocalVision:
             try:self.channel.get_nowait()
             except queue.Empty:break
 
+    # 검출 속도: True=매 프레임, False=0.5초에 한 번.
     def set_active(self, active):
         self.active.set() if active else self.active.clear()
 
+    # 검출 상태 (모드, 마지막 프레임·검출 후 경과 시간).
     def health(self):
         now = time.monotonic()
         received, detected = self.progress[:]
@@ -143,6 +158,7 @@ class LocalVision:
                 'last_raw_read_age_s': now-received if received else None,
                 'last_detection_age_s': now-detected if detected else None}
 
+    # 프로세스 종료.
     def close(self):
         self.stop.set()
         for process in (p for p in (self.process, self.preview) if p is not None):

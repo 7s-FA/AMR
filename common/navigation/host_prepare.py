@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 관제 '로봇 준비' 작업자. 관제 PC 런처(launcher/robot_prepare.sh)가 요청 ID와 함께 부르면
+#       위치추정·Nav2·카메라·rest·액션 서비스가 모두 준비됐는지 실제 센서/상태로 확인하고 결과를 돌려준다. 이동 명령은 보내지 않는다.
+# 실행: 서버 = <로봇>-host-ready.service → start_host_ready.sh → host_prepare.py burgerN --serve
+#       요청 = host_prepare.py burgerN --request-id <ID> [--parked] (관제 런처가 ssh 로 실행)
+# 호출 관계: ready_parallel.py(병렬 준비), operation.Operation(모드 전환), startup_state.py(응답 대기·기록 보조).
+# ========================================================================
 """Persistent host readiness worker; reconnect by request ID, never queue movement."""
 import argparse
 import json
@@ -11,10 +18,12 @@ import time
 from startup_state import Feedback, Journal, lifecycle_evidence_valid, apply_lifecycle_reply
 
 
+# 준비 작업자 유닉스 소켓 경로 ($XDG_RUNTIME_DIR/<로봇>-host-ready.sock).
 def socket_path(robot):
     return Path(os.environ.get('XDG_RUNTIME_DIR','/tmp'))/(robot+'-host-ready.sock')
 
 
+# 확인용 ROS 노드·실행기를 안전한 순서로 정리.
 def close_readiness(stop, thread, executor, listener, node, shutdown):
     # Stop and join the executor before destroying anything that can wake it.
     stop.set()
@@ -26,6 +35,7 @@ def close_readiness(stop, thread, executor, listener, node, shutdown):
     shutdown()
 
 
+# check() 가 참이 될 때까지 최대 45초 기다린다.
 def wait_current_health(check, timeout=45., clock=time.monotonic, sleep=time.sleep):
     """Allow a newly started observer to receive evidence from healthy services."""
     deadline = clock() + timeout
@@ -37,6 +47,7 @@ def wait_current_health(check, timeout=45., clock=time.monotonic, sleep=time.sle
         sleep(.05)
 
 
+# 요청 쪽: 서비스를 켜고 소켓에 요청 ID를 보낸 뒤 진행 로그와 최종 결과를 출력 (최대 300초).
 def request(robot, identity, parked=False):
     here = Path(__file__).absolute().parent
     subprocess.run(['systemctl','--user','start',robot+'-host-ready.service'],check=True)
@@ -70,6 +81,7 @@ def request(robot, identity, parked=False):
     if not reply.get('success'):raise RuntimeError(reply.get('message','Preparation failed'))
 
 
+# 서버 쪽: odom·모터·라이다·Nav2 상태를 구독하며 요청이 오면 준비 단계를 수행하고 요청 ID별로 결과를 기록.
 def serve(robot):
     import rclpy
     from rclpy.action import ActionClient
@@ -95,11 +107,15 @@ def serve(robot):
     feedback=Feedback();lock=threading.Lock();scan={};states={};clients={};pending={}
     action=ActionClient(node,Burger,'/M'+robot[-1]+'/data')
     power=node.create_client(SetBool,'motor_power')
+    # 메시지 시각의 나이(초).
     def age(stamp):return (node.get_clock().now().nanoseconds-stamp.sec*10**9-stamp.nanosec)/1e9
+    # odom 콜백: 정지 여부 판단용 기록.
     def odom(msg):
         with lock:feedback.odometry(age(msg.header.stamp),msg.twist.twist.linear.x,msg.twist.twist.angular.z)
+    # sensor_state 콜백: 모터 토크 상태 기록.
     def sensor(msg):
         with lock:feedback.motor(msg.torque,age(msg.header.stamp))
+    # 라이다 콜백: 최근 수신 시각 기록.
     def laser(msg):
         with lock:scan.update(at=time.monotonic(),age=age(msg.header.stamp))
     latest_sensor=QoSProfile(depth=1,reliability=ReliabilityPolicy.BEST_EFFORT)
@@ -109,6 +125,7 @@ def serve(robot):
     for name in ('amcl','bt_navigator'):clients[name]=node.create_client(GetState,name+'/get_state')
     due={name:0. for name in clients}
     transitions={}
+    # lifecycle 전환 이벤트 콜백 생성 (amcl, bt_navigator 상태 갱신).
     def on_transition(name):
         def receive(msg):
             now=time.monotonic()
@@ -118,6 +135,7 @@ def serve(robot):
         return receive
     for name in clients:
         subs.append(node.create_subscription(TransitionEvent,name+'/transition_event',on_transition(name),1))
+    # lifecycle 상태를 주기적으로 조회 (응답이 늦어도 같은 요청을 유지).
     def poll_states():
         now=time.monotonic()
         for name,client in clients.items():
@@ -139,11 +157,13 @@ def serve(robot):
                 pending[name]=(client.call_async(GetState.Request()),now)
     node.create_timer(.2,poll_states)
     spin_stop=threading.Event()
+    # 확인용 노드를 별도 스레드에서 계속 돌린다.
     def spin_readiness():
         while not spin_stop.is_set() and rclpy.ok():
             executor.spin_once(timeout_sec=.1)
     thread=threading.Thread(target=spin_readiness,daemon=True);thread.start()
 
+    # 준비 증거 모음: 정지 odom, 모터 토크, 라이다, amcl/bt_navigator ACTIVE.
     def proof(navigation=True):
         now=time.monotonic()
         with lock:
@@ -158,6 +178,7 @@ def serve(robot):
         except Exception:checks['map_tf']=False
         return checks
 
+    # 모든 증거가 참이 될 때까지 대기 (없으면 무엇이 빠졌는지 오류로).
     def wait_proof(timeout=45):
         deadline=time.monotonic()+timeout
         while True:
@@ -166,6 +187,7 @@ def serve(robot):
             if time.monotonic()>=deadline:raise RuntimeError('Readiness feedback missing: '+', '.join(k for k,v in checks.items() if not v))
             time.sleep(.05)
 
+    # 모터 토크가 꺼져 있으면 켠다 (최신 sensor_state 확인 후).
     def ensure_motor():
         deadline=time.monotonic()+45
         while True:
@@ -187,11 +209,13 @@ def serve(robot):
             if time.monotonic()>=deadline:raise RuntimeError('Fresh torque=True not confirmed')
             time.sleep(.05)
 
+    # 필수 서비스 7개가 모두 active 인지 확인.
     def units_ready():
         units=[robot+'-'+s+'.service' for s in ('base','localization','nav2','camera','docking-ready','rest-ready','nav-control')]
         result=subprocess.run(['systemctl','--user','is-active',*units],capture_output=True,text=True)
         return result.stdout.splitlines()==['active']*len(units)
 
+    # 서비스/액션 응답을 제한 시간까지 기다린다.
     def future_result(future,timeout,label):
         deadline=time.monotonic()+timeout
         while not future.done():
@@ -201,6 +225,7 @@ def serve(robot):
         if result is None:raise RuntimeError(label+' empty response')
         return result
 
+    # 요청 1건 처리: 같은 ID 재요청이면 기록 재사용, 아니면 단계별(서비스 준비→증거 확인→모드 전환) 실행.
     def prepare(identity,parked):
         started=time.monotonic();old=journal.get(identity)
         if old and old.get('parked')!=parked:raise RuntimeError('Request ID reused with different parking option')
@@ -216,6 +241,7 @@ def serve(robot):
             raise RuntimeError('Preparation was interrupted; do not blindly repeat RESTART. Start a new host session while stopped')
         journal.put(identity,status='running',stage='admission',parked=parked,success=False)
         timings={}
+        # 준비 단계 하나를 실행하고 걸린 시간을 기록.
         def stage(name,fn):
             begin=time.monotonic();journal.put(identity,status='running',stage=name,parked=parked)
             print(robot+' prepare '+name,flush=True)
@@ -242,6 +268,7 @@ def serve(robot):
                 return journal.put(identity,status='success',stage='ready',success=True,parked=parked,
                                    seconds=round(time.monotonic()-started,3),timings=timings,
                                    movement_sent=False,reused_running=True)
+            # 운용 모드를 individual 로 맞춘다 (준비 중 관제 이동 명령을 받지 않게).
             def admit():
                 with op.lock():op.set_mode('individual')
             stage('admission',admit)
@@ -310,6 +337,7 @@ def serve(robot):
         close_readiness(spin_stop,thread,executor,listener,node,rclpy.shutdown)
 
 
+# --serve 면 서버, --request-id 면 요청자로 동작.
 def main():
     p=argparse.ArgumentParser();p.add_argument('robot',choices=['burger1','burger2']);p.add_argument('--serve',action='store_true')
     p.add_argument('--request-id');p.add_argument('--parked',action='store_true');a=p.parse_args()

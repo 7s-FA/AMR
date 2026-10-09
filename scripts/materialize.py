@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 실행 폴더(.runtime/M1 또는 M2) 만들기. runtime_manifest.json 에 적힌 대로 원본 파일을 실행 위치에 링크(또는 복사)하고,
+#       runtime.env, start_action.sh, systemd 유닛(base/camera/nav-control/rest-ready/action)을 생성한다.
+# 실행: robot.py configure 가 호출. 링크 방식이라 원본(AMR/common, M1, M2)을 고치면 실행 폴더에 바로 반영된다(서비스 재시작 필요).
+# ========================================================================
 """Assemble one profile inside AMR; linked sources remain directly editable in Git."""
 import argparse
 import hashlib
@@ -12,6 +17,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# 매니페스트 검사 → 링크/복사 → 환경 파일·유닛·실행 스크립트 생성.
 def materialize(robot, output, linked=False):
     if robot not in ('M1', 'M2'):
         raise ValueError('Choose M1 or M2')
@@ -42,6 +48,7 @@ def materialize(robot, output, linked=False):
         plan.append((source, dest, kind))
     out.mkdir(parents=True)
 
+    # 파일 하나를 링크 또는 복사.
     def install(source, dest, link=linked):
         dest.parent.mkdir(parents=True, exist_ok=True)
         if link:

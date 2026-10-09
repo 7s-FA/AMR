@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: ArUco 마커·카메라 보정 기본 알고리즘 (PinkLAB 강의 코드 기반).
+# 사용처: board.py, cli.py(보정), generate_station_boards.py(마커 이미지).
+# ========================================================================
 """Algorithms adapted from docs/lecture_original/pose_ArUco (PinkLAB).
 
 Images stay at their native size. Coordinates are camera optical coordinates:
@@ -11,18 +15,21 @@ import numpy as np
 import yaml
 
 
+# 양수 검사 (설정값).
 def positive(value, name):
     if not math.isfinite(value) or value <= 0:
         raise ValueError(f'{name} must be finite and positive')
     return value
 
 
+# ArUco 사전 객체.
 def dictionary(name):
     if not name.startswith('DICT_') or not hasattr(cv2.aruco, name):
         raise ValueError(f'Unsupported ArUco dictionary: {name}')
     return cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, name))
 
 
+# 마커 이미지 생성.
 def make_marker(name, marker_id, pixels=600, margin=60):
     d = dictionary(name)
     if not 0 <= marker_id < len(d.bytesList) or pixels < 32 or margin < 1:
@@ -35,6 +42,7 @@ def make_marker(name, marker_id, pixels=600, margin=60):
                               cv2.BORDER_CONSTANT, value=255)
 
 
+# 체커보드 코너 3D 좌표 (보정용).
 def board_corners(image, cols, rows):
     if cols < 2 or rows < 2:
         raise ValueError('Use INTERNAL corner counts >= 2')
@@ -55,6 +63,7 @@ def board_corners(image, cols, rows):
                            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, .001))
 
 
+# 체커보드 사진들로 카메라 보정값 계산.
 def calibrate(paths, cols, rows, square_m, camera_name, min_views=10):
     positive(square_m, 'square_m')
     if cols < 2 or rows < 2 or min_views < 3:
@@ -105,6 +114,7 @@ def calibrate(paths, cols, rows, square_m, camera_name, min_views=10):
     }
 
 
+# 보정 YAML 읽기 (카메라 행렬·왜곡).
 def load_calibration(path):
     data = yaml.safe_load(Path(path).read_text())
     matrix = np.array(data['camera_matrix']['data'], dtype=float).reshape(3, 3)
@@ -118,9 +128,11 @@ def load_calibration(path):
     return matrix, distortion, size
 
 
+# 이미지 1장에서 마커를 한 번만 찾고 결과를 공유.
 class MarkerFinder:
     """One image pass shared by single-marker and four-marker detection."""
 
+    # 검출기 설정.
     def __init__(self, name):
         self.dictionary = dictionary(name)
         self.params = (cv2.aruco.DetectorParameters() if hasattr(cv2.aruco, 'ArucoDetector')
@@ -129,6 +141,7 @@ class MarkerFinder:
         self.detector = (cv2.aruco.ArucoDetector(self.dictionary, self.params)
                          if hasattr(cv2.aruco, 'ArucoDetector') else None)
 
+    # 마커 ID·코너 찾기.
     def find(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if self.detector is None:
@@ -136,7 +149,9 @@ class MarkerFinder:
         return self.detector.detectMarkers(gray)
 
 
+# 단일 마커 자세 검출기 (보정 도구용).
 class Detector:
+    # 마커 크기·보정값 설정.
     def __init__(self, name='DICT_5X5_100', target_id=23, marker_m=None, calibration=None):
         self.finder = MarkerFinder(name)
         self.dictionary = self.finder.dictionary
@@ -148,6 +163,7 @@ class Detector:
         self.marker_m = positive(marker_m, 'marker_m') if marker_m is not None else None
         self.calibration = calibration
 
+    # 단일 마커 자세 계산.
     def detect(self, frame):
         h, w = frame.shape[:2]
         if self.calibration is not None and self.calibration[2] != (w, h):

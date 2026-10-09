@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: 보정 도구(cli.py)용 영상 입력 (ROS 이미지 토픽 또는 USB/동영상).
+# 사용처: cli.py. 실제 도킹은 camera_ipc(공유메모리)를 쓴다.
+# ========================================================================
 """Bounded frame reads for ROS camera topics or a local USB/video source."""
 import multiprocessing as mp
 import queue
@@ -6,6 +10,7 @@ import time
 import cv2
 
 
+# VideoCapture 에서 프레임 몇 장 읽기.
 def _capture(source, frames):
     cap = cv2.VideoCapture(int(source) if source.isdecimal() else source)
     try:
@@ -30,13 +35,16 @@ def _capture(source, frames):
         cap.release()
 
 
+# USB 카메라·동영상 입력.
 class VideoSource:
+    # 장치 열기.
     def __init__(self, source):
         ctx = mp.get_context('spawn')
         self.frames = ctx.Queue(maxsize=1)
         self.process = ctx.Process(target=_capture, args=(source, self.frames), daemon=True)
         self.process.start()
 
+    # 프레임 1장 읽기.
     def read(self, timeout):
         try:
             kind, value = self.frames.get(timeout=timeout)
@@ -46,6 +54,7 @@ class VideoSource:
             raise RuntimeError(value)
         return value
 
+    # 장치 닫기.
     def close(self):
         self.process.terminate()
         self.process.join(timeout=2)
@@ -55,7 +64,9 @@ class VideoSource:
         self.frames.close()
 
 
+# ROS 이미지 토픽 입력 (오래되거나 중복된 프레임은 버림).
 class RosSource:
+    # 노드·구독 생성.
     def __init__(self, topic, compressed=False, observation_topic=None, max_age_s=.5):
         import rclpy
         from rclpy.signals import SignalHandlerOptions
@@ -70,7 +81,6 @@ class RosSource:
         self.error = None
         self.last_stamp = None
         self.max_age_s = max_age_s
-        self.stale_frames = self.accepted_frames = 0
         # Let the CLI's KeyboardInterrupt/finally run before closing the ROS context.
         rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
         namespace = '/'+topic.strip('/').split('/')[0]
@@ -85,6 +95,7 @@ class RosSource:
         self.publisher = (self.node.create_publisher(String, observation_topic, latest_qos)
                           if observation_topic else None)
 
+    # 이미지 수신 콜백: 최신 프레임만 보관.
     def _receive(self, msg):
         stamp = (msg.header.stamp.sec, msg.header.stamp.nanosec)
         # Ignore duplicate or delayed frames before detection. Never refresh the
@@ -94,7 +105,6 @@ class RosSource:
         source_ns = stamp[0]*1_000_000_000+stamp[1]
         age = (self.node.get_clock().now().nanoseconds-source_ns)/1e9
         if source_ns <= 0 or not -.1 <= age <= self.max_age_s:
-            self.stale_frames += 1
             return
         try:
             image = (self.bridge.compressed_imgmsg_to_cv2(msg, 'bgr8') if self.compressed
@@ -103,10 +113,10 @@ class RosSource:
                                   'source_stamp': {'sec': stamp[0], 'nanosec': stamp[1]},
                                   'frame_id': msg.header.frame_id})
             self.last_stamp = stamp
-            self.accepted_frames += 1
         except Exception as exc:
             self.error = str(exc)
 
+    # 새 프레임이 올 때까지 대기 후 반환.
     def read(self, timeout):
         deadline = time.monotonic() + timeout
         self.latest = None
@@ -116,12 +126,14 @@ class RosSource:
                 return self.latest
         raise RuntimeError(f'No new ROS image for {timeout:g}s; conversion error: {self.error}')
 
+    # 관측 결과를 토픽으로 발행 (선택).
     def publish(self, observation):
         if self.publisher and self.rclpy.ok():
             import json
             from std_msgs.msg import String
             self.publisher.publish(String(data=json.dumps(observation, allow_nan=False)))
 
+    # 노드 정리.
     def close(self):
         self.node.destroy_node()
         if self.rclpy.ok():

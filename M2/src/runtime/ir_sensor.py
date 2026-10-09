@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: burger2 IR 센서(GPIO17, Pi5 RP1 칩) 읽기. HIGH 면 도착(정지) 신호.
+# 사용처: docking_node.py·docking_standby.py·rest_forward.py·retry_ready.py 가 GPIOInput 클래스를 import.
+#       단독 실행(main) 하면 IR 상태를 토픽으로 발행하는 진단용 노드 (운용 중에는 쓰지 않음).
+# ========================================================================
 """Publish physical GPIO HIGH as Bool true. This node does not command motors."""
 import argparse
 import math
 import sys
 
 
+# GPIO 입력 1개를 잡고 읽는 클래스 (libgpiod v1/v2 모두 지원).
 class GPIOInput:
+    # RP1 GPIO 칩인지 확인 후 핀을 입력으로 요청.
     def __init__(self, chip='/dev/gpiochip4', pin=17):
         import gpiod
         self.chip = self.line = self.request = None
@@ -32,11 +39,13 @@ class GPIOInput:
             self.close()
             raise
 
+    # 현재 HIGH 인지.
     def high(self):
         if self.request is not None:
             return self.request.get_value(self.pin) == self.gpiod.line.Value.ACTIVE
         return bool(self.line.get_value())
 
+    # GPIO 해제.
     def close(self):
         if self.request is not None:
             self.request.release()
@@ -50,6 +59,7 @@ class GPIOInput:
             self.chip = None
 
 
+# 진단용: IR 상태를 주기적으로 Bool 토픽 발행.
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--chip', default='/dev/gpiochip4')
@@ -73,6 +83,7 @@ def main(argv=None):
             durability=DurabilityPolicy.VOLATILE))
         previous = None
 
+        # GPIO 읽고 발행.
         def sample():
             nonlocal previous
             value = gpio.high()  # Read failure exits; never synthesize a LOW.

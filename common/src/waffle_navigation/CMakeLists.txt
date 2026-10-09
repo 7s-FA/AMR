@@ -1,3 +1,6 @@
+# ========================================================================
+# 역할: waffle_navigation 패키지 빌드 설정 (C++ 플러그인·자가시험 빌드, 파이썬 스크립트·launch·설정 설치).
+# ========================================================================
 cmake_minimum_required(VERSION 3.8)
 project(waffle_navigation)
 
@@ -43,12 +46,6 @@ install(
   PROGRAMS scripts/nav2_waypoints.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME nav2_waypoints
-)
-
-install(
-  PROGRAMS scripts/normalize_scan.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME normalize_scan
 )
 
 install(

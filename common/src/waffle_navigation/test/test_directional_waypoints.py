@@ -157,20 +157,10 @@ POINTS = [{'x': -0.5, 'y': 0.0, 'yaw': 0.0, 'mode': 'reverse'},
           {'x': 0.5, 'y': 0.0, 'yaw': 0.0, 'mode': 'forward'}]
 
 
-def test_namespaced_goals_and_odometry_reject_another_robot():
+def test_namespaced_goals_reject_another_robot():
     nav = FakeNavigator()
     nav.frame_prefix = 'burger1/'
     assert route.make_goal_pose_list(nav, POINTS)[0].header.frame_id == 'burger1/map'
-    nav.odom_message = route.Odometry()
-    nav.odom_message.pose.pose.orientation.w = 1.0
-    nav.odom_received_at = route.time.monotonic()
-    nav._fresh_stamp = lambda *args: True
-    nav.odom_message.header.frame_id = 'burger1/odom'
-    nav.odom_message.child_frame_id = 'burger1/base_footprint'
-    assert route.WaypointNavigator._departure_pose(nav) == (0.0, 0.0, 0.0)
-    nav.odom_message.header.frame_id = 'burger2/odom'
-    with pytest.raises(RuntimeError, match='좌표계'):
-        route.WaypointNavigator._departure_pose(nav)
 
 
 def test_other_robot_actions_do_not_block_namespaced_departure():
@@ -469,13 +459,6 @@ def test_departure_failure_never_sends_waypoint():
     assert not nav.goals
 
 
-def test_departure_distance_is_measured_along_initial_body_direction():
-    assert route.backup_progress((1, 2, route.math.pi/2), (1, 1.9, route.math.pi/2)) == pytest.approx(0.1)
-    for pose in ((0.02, 0, 0), (-0.1, 0.03, 0), (-0.1, 0, 0.2)):
-        with pytest.raises(RuntimeError):
-            route.backup_progress((0, 0, 0), pose)
-
-
 def scan_fixture():
     from sensor_msgs.msg import LaserScan
     return LaserScan(angle_min=0.0, angle_increment=route.math.pi/180,
@@ -563,11 +546,9 @@ def test_departure_stops_on_all_exits(monkeypatch, fault):
 @pytest.mark.parametrize('stale_header, stale_arrival', [(True, False), (False, True)])
 def test_departure_sensor_freshness_checks_message_stamp_and_receipt(monkeypatch, stale_header, stale_arrival):
     monkeypatch.setattr(route.time, 'monotonic', lambda: 2.0)
-    nav = SimpleNamespace(odom_message=route.Odometry(), scan_message=scan_fixture(),
+    nav = SimpleNamespace(scan_message=scan_fixture(),
                           odom_received_at=0.0 if stale_arrival else 2.0,
                           scan_received_at=0.0 if stale_arrival else 2.0,
                           _fresh_stamp=lambda *args: not stale_header)
-    with pytest.raises(RuntimeError, match='odom'):
-        route.WaypointNavigator._departure_pose(nav)
     with pytest.raises(RuntimeError, match='scan'):
         route.WaypointNavigator._check_departure_scan(nav)

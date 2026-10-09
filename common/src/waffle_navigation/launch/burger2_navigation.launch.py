@@ -1,3 +1,8 @@
+# ========================================================================
+# 역할: burger2 Nav2 실행 launch (우리 코드). 로봇 설정 + 도착 조정값을 합친 임시 파라미터로 lean_bringup_launch 를 실행한다.
+#       Nav2 도킹 서버 출력은 실제 모터 토픽과 섞이지 않게 cmd_vel_nav_unused 로 돌린다. RViz 는 관제 PC 에서 따로.
+# 실행: burger2-nav2.service → launch_nav2.sh → ros2 launch waffle_navigation burger2_navigation.launch.py
+# ========================================================================
 """Onboard Nav2 under /burger2; the host starts RViz separately."""
 import importlib.util
 import os
@@ -13,6 +18,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, SetRemap
 
 
+# 파라미터 파일 + arrival_tuning 병합 → 임시 YAML → lean_bringup_launch 포함 (종료 시 임시 파일 삭제).
 def prepare(context):
     share = get_package_share_directory('waffle_navigation')
     helper_path = share + '/config/arrival_tuning.py'
@@ -32,12 +38,12 @@ def prepare(context):
         yaml.safe_dump(params, stream, sort_keys=False)
         generated = stream.name
 
+    # 임시 파라미터 파일 삭제.
     def cleanup(_context):
         if os.path.exists(generated):
             os.unlink(generated)
         return []
 
-    nav2 = get_package_share_directory('nav2_bringup')
     return [
         RegisterEventHandler(OnShutdown(on_shutdown=[OpaqueFunction(function=cleanup)])),
         GroupAction([
@@ -56,6 +62,7 @@ def prepare(context):
     ]
 
 
+# launch 인자 선언(params_file, waypoints_file, use_rviz 등) 후 prepare 실행.
 def generate_launch_description():
     share = get_package_share_directory('waffle_navigation')
     return LaunchDescription([

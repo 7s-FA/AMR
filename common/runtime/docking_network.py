@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: Fast DDS 네트워크 설정 XML 생성. 지정한 Wi-Fi 인터페이스 IP 로만 통신하고, 수신 버퍼 16MB,
+#       로봇 내부 통신은 공유메모리(SHM)로 보내게 한다.
+# 실행: start_base.sh, start_docking_*.sh, run_rest.sh, start_rest_ready.sh, nav2_network.bash 가 각 프로세스 시작 전에 실행.
+# 설정: docking.yaml 의 network 항목 (robot_interface 등).
+# ========================================================================
 """Generate a process-local Fast DDS LAN profile from the selected interface."""
 import argparse
 import json
@@ -9,6 +15,7 @@ import xml.etree.ElementTree as ET
 import yaml
 
 
+# 인터페이스 IP 를 기다렸다가(최대 30초) XML 프로필을 만들어 저장.
 def generate(config, role, output, local_shm=False):
     if local_shm and role != 'robot':
         raise ValueError('Local camera shared memory is only configured on the robot')

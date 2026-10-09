@@ -1,4 +1,7 @@
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: ROS setup.bash 들을 매번 실행하지 않고 캐시(ros_setup_cache.py)로 빠르게 불러온다 (source 용).
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

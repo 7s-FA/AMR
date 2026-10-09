@@ -1,3 +1,8 @@
+// ========================================================================
+// 역할: 카메라 캡처 프로그램 (우리 코드, C++). libcamera 로 640x480 BGR 프레임을 받아 공유메모리 파일에 쓰고,
+//       제어 소켓으로 속도(active 15fps / idle 2fps)를 바꾼다. ROS·DDS·네트워크 영상 없음.
+// 실행: start_camera.sh (<로봇>-camera.service). 빌드: scripts/build_camera.sh.
+// ========================================================================
 // libcamera capture without ROS, DDS, ImageTransport or network image publishers.
 #include <libcamera/libcamera.h>
 #include <libcamera/formats.h>

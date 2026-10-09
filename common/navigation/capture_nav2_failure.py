@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: Nav2 회전 충돌 거부(error_code 703)로 실패했을 때 원인 분석용 상태를 JSON 으로 저장 (읽기 전용, 움직이지 않음).
+#       라이다, 로봇 외곽, 로컬 코스트맵, TF, 관련 파라미터를 4초간 모아 data/<로봇>/nav2_failures/ 에 남긴다.
+# 실행: sequence_runner.py 의 collision_failure_snapshot() 이 실패 직후 한 번 실행.
+# ========================================================================
 """Read-only post-failure evidence. Never publishes goals or velocity commands."""
 import argparse,json,time,rclpy
 from pathlib import Path
@@ -6,8 +11,7 @@ p=argparse.ArgumentParser();p.add_argument("--robot",choices=("burger1","burger2
 robot=args.robot
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PolygonStamped
-from nav_msgs.msg import OccupancyGrid
-from rclpy.qos import QoSProfile,ReliabilityPolicy,DurabilityPolicy,qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data
 from tf2_ros import Buffer,TransformListener
 from nav2_msgs.srv import GetCostmap
 from rcl_interfaces.srv import GetParameters

@@ -1,16 +1,26 @@
+# ========================================================================
+# 역할: 마커 도킹 상태 기계(ROS·GPIO 와 무관한 순수 계산). 카메라 마커 위치·odom·IR 입력으로 속도 명령을 계산한다.
+#       상태: IDLE → ALIGN(마커 보고 정렬) → FINAL_APPROACH(직진) → IR HIGH 면 DOCKED. 이상 시 FAULT/STOPPED, 0 속도.
+#       시야 끊김(VISION_WAIT)·odom 끊김(ODOM_WAIT)은 멈춘 채 기다렸다가 제한 횟수 안에서 재개한다.
+# 사용처: docking_node.py 의 DockingNode 가 10ms 마다 tick() 을 부른다. 설정은 docking.yaml 의 control 항목(Settings).
+# 단위: SI(m, rad, s). 로봇 기준 x=앞, y=왼쪽.
+# ========================================================================
 """ROS/GPIO-independent docking state machine. SI units; base x forward, y left."""
 from dataclasses import dataclass, fields
 import math
 
 
+# 각도를 -π~π 로 정규화.
 def wrap(angle):
     return math.atan2(math.sin(angle), math.cos(angle))
 
 
+# 값을 ±limit 안으로 자른다.
 def clamp(value, limit):
     return max(-limit, min(limit, value))
 
 
+# 도킹 제어 설정값 묶음 (docking.yaml control). 각 값의 의미는 필드 이름과 같다.
 @dataclass
 class Settings:
     camera_forward_m: float = 0.0
@@ -50,6 +60,7 @@ class Settings:
     min_visual_distance_m: float = 0.12
     stopped_hold_s: float = 0.5
 
+    # 설정값 범위 검사 (위험한 값이면 시작 전에 거부).
     def __post_init__(self):
         for f in fields(self):
             x = getattr(self, f.name)
@@ -81,9 +92,11 @@ class Settings:
             raise ValueError('Invalid angular speed limits')
 
 
+# 도킹 상태 기계 본체.
 class DockingControl:
     ACTIVE = {'ALIGN', 'VISION_WAIT', 'ODOM_WAIT', 'FINAL_APPROACH', 'STOPPING'}
 
+    # 초기 상태 IDLE, 입력·필터·제한 카운터 초기화.
     def __init__(self, settings=None):
         self.cfg = settings or Settings()
         self.state, self.reason = 'IDLE', 'waiting_for_start'
@@ -103,12 +116,14 @@ class DockingControl:
         self.odom_recovery_frames = 0
         self.recovery_motor_ready = True
 
+    # 정지: FAULT(오류) 또는 STOPPED(정상 중단)로 바꾸고 명령을 0으로.
     def halt(self, reason, fault=True):
         self.state = 'FAULT' if fault else 'STOPPED'
         self.reason = reason
         self.last_command = (0.0, 0.0)
         self.aligned_since = None
 
+    # IR 입력 반영. 직진 중 HIGH 면 DOCKED, 정렬 중 HIGH 면 안전 정지.
     def set_ir(self, high, now):
         if type(high) is not bool:
             raise ValueError('IR must be a physical Boolean level')
@@ -127,6 +142,7 @@ class DockingControl:
                 self.halt('ir_high_before_final_approach', fault=False)
             self.last_command = (0.0, 0.0)
 
+    # odom 입력 반영. 순간 점프·이동거리 누적·회전속도 필터 갱신.
     def set_odom(self, x, y, yaw, linear, angular, now):
         values = (x, y, yaw, linear, angular)
         if not all(math.isfinite(v) for v in values):
@@ -162,6 +178,7 @@ class DockingControl:
             self.filtered_angular += weight*(angular-self.filtered_angular)
         self.odom, self.odom_time = values, now
 
+    # 카메라 마커 관측 반영 (자세가 무효면 정렬 유지 시간 초기화).
     def set_observation(self, observation, now):
         self.observation, self.observation_time = observation, now
         # A missing frame between aligned frames must break the continuous hold.
@@ -170,10 +187,12 @@ class DockingControl:
             self.vision_good_since = None
             self.recovery_frames = 0
 
+    # 시각 stamp 가 timeout 이내인지.
     @staticmethod
     def fresh(stamp, now, timeout):
         return stamp is not None and 0 <= now-stamp <= timeout
 
+    # IR·odom·카메라 입력 중 오래된 것이 있으면 그 이유를 돌려준다.
     def input_error(self, now, vision=True):
         c = self.cfg
         if not self.fresh(self.ir_time, now, c.ir_timeout_s):
@@ -184,6 +203,7 @@ class DockingControl:
             return 'vision_timeout'
         return None
 
+    # 마커 관측을 로봇 기준 (거리, 좌우 오차, 각도 오차)로 변환.
     def pose(self):
         o, c = self.observation, self.cfg
         if not o or not o.get('pose_valid'):
@@ -200,6 +220,7 @@ class DockingControl:
         except (TypeError, ValueError, KeyError):
             return None
 
+    # 시작 조건 검사: 입력 최신, IR LOW, 정지 상태, 마커 4개 보임.
     def start_error(self, now):
         if self.state in self.ACTIVE:
             return 'already_running'
@@ -217,6 +238,7 @@ class DockingControl:
             return 'robot_must_be_stationary'
         return None
 
+    # 조건이 맞으면 ALIGN 상태로 시작.
     def start(self, now):
         error = self.start_error(now)
         if error:
@@ -233,6 +255,7 @@ class DockingControl:
         self.odom_recovery_frames = 0
         return True, self.state
 
+    # odom 이 끊기면 멈추고 ODOM_WAIT 로 (복구 횟수 제한).
     def wait_for_odom(self, now):
         # No sleeping, new thread or ROS query: existing ticks keep sending zero.
         if self.odom_recoveries >= self.cfg.max_odom_recoveries:
@@ -245,6 +268,7 @@ class DockingControl:
         self.odom_good_since = self.aligned_since = self.stopped_since = None
         self.odom_recovery_frames = 0
 
+    # ODOM_WAIT 중: 전체 시간/거리 제한 확인, 최신 정지 odom 이 이어지면 원래 단계로 복귀.
     def odom_wait_tick(self, now):
         c, phase = self.cfg, self.odom_resume_state
         if now-self.started_at >= c.max_total_time_s or self.distance >= c.max_total_distance_m:
@@ -277,6 +301,7 @@ class DockingControl:
                 self.last_steering_time = None
         return (0.0, 0.0)
 
+    # 회전 명령 계산 (P + 실제 회전 속도 감쇠 D, 최소 회전 속도 처리).
     def turn(self, value, settling=False):
         # PD-style rate feedback: retain the geometric P term and damp actual
         # rotation. Do not differentiate noisy camera poses or target switches.
@@ -290,6 +315,7 @@ class DockingControl:
         return math.copysign(max(self.cfg.min_angular_rps,
                                  min(abs(value), self.cfg.max_angular_rps)), value)
 
+    # 주기마다 명령 계산 후 회전 비율·가속 제한을 적용해 최종 (v, w) 반환.
     def tick(self, now):
         previous = self.last_command
         command = self._tick(now)
@@ -305,6 +331,7 @@ class DockingControl:
         self.last_command = command
         return command
 
+    # 상태별 실제 계산: 정렬(거리·좌우·각도 맞추기), 직진, 시간·거리 제한, 시야 끊김 처리.
     def _tick(self, now):
         zero = (0.0, 0.0)
         c = self.cfg

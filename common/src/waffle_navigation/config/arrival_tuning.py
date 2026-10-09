@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: waypoints.yaml 의 arrival_tuning(도착 공차 등 6개 값)을 검사하고 Nav2 파라미터에 덮어쓴다 (원본 YAML 은 수정 안 함).
+# 사용처: burger1/2_navigation.launch.py(Nav2 시작 시), nav2_waypoints.py(실행 중 값 확인).
+# ========================================================================
 """Validate optional waypoint arrival settings and merge without altering source YAML."""
 import math
 from copy import deepcopy
@@ -5,6 +9,7 @@ import yaml
 KEYS = {"xy_goal_tolerance", "intermediate_xy_tolerance", "yaw_goal_tolerance",
         "max_rotational_vel", "min_rotational_vel", "rotational_acc_lim"}
 
+# 충돌 검사 관련 좌표계 설정 확인.
 def validate_collision_frames(params):
     """Behaviors pass unframed poses directly to the corresponding costmap."""
     behavior = params['behavior_server']['ros__parameters']
@@ -18,6 +23,7 @@ def validate_collision_frames(params):
                 f'{behavior_frame}, {costmap_name}.global_frame={costmap_frame}. '
                 '두 좌표계를 같게 설정하세요.')
 
+# 경로 파일에서 arrival_tuning 읽기·검사.
 def load_tuning(path):
     with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
@@ -37,6 +43,7 @@ def load_tuning(path):
         if tuning["intermediate_xy_tolerance"] < tuning["xy_goal_tolerance"]:
             raise ValueError("정지 후 공차가 이동 공차보다 작으면 조기 중단될 수 있습니다. 같거나 크게 설정하세요.")
     return {k:float(v) for k,v in tuning.items()}
+# Nav2 파라미터 사전에 도착 조정값 반영.
 def merge_params(params, tuning):
     result = deepcopy(params)
     if not tuning:

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 지금 멈춰 있는 위치(AMCL)를 Nav2 설정 파일의 AMCL 초기 위치로 저장하는 도구 (다음 부팅부터 그 자리에서 시작).
+# 실행: 수동. save_start_pose.sh [--preview]. 설정 파일의 다른 값·주석은 그대로 둔다.
+# ========================================================================
 """Register a stationary, localized Burger pose as AMCL's persistent start pose.
 
 Run once at the real starting place after aligning RViz with the robot.
@@ -24,10 +28,12 @@ from tf2_ros import Buffer, TransformException, TransformListener
 import yaml
 
 
+# 로봇 접두어 좌표계 이름.
 def frame_name(reader, name):
     return getattr(reader, 'frame_prefix', '') + name
 
 
+# 설정 텍스트에서 AMCL 초기 위치 숫자만 바꾼 새 텍스트를 만든다.
 def updated_config(original, pose):
     """Change only AMCL initialization scalars, preserving all tuning and comments."""
     if len(pose) != 3 or not all(math.isfinite(value) for value in pose):
@@ -41,6 +47,7 @@ def updated_config(original, pose):
     if not match:
         raise ValueError('AMCL 설정 블록을 찾지 못했습니다.')
     block = match.group()
+    # 키 하나의 값만 정확히 한 번 교체.
     def replace_one(pattern, replacement):
         nonlocal block
         block, count = re.subn(pattern, replacement, block, flags=re.MULTILINE)
@@ -56,6 +63,7 @@ def updated_config(original, pose):
     return updated
 
 
+# 백업 후 설정 파일 저장.
 def save_config(path, pose):
     path = Path(path).expanduser().resolve(strict=True)
     original = path.read_text(encoding='utf-8')
@@ -78,7 +86,9 @@ def save_config(path, pose):
     return path
 
 
+# AMCL 위치와 odom 으로 '멈춰 있는 최신 위치'를 읽는 노드.
 class StartPoseReader(Node):
+    # 구독 생성.
     def __init__(self, namespace=''):
         super().__init__('burger_start_pose_reader', namespace=namespace)
         prefix = self.get_namespace().strip('/')
@@ -92,13 +102,16 @@ class StartPoseReader(Node):
                                  QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.create_subscription(Odometry, 'odom', self.on_odom, qos_profile_sensor_data)
 
+    # AMCL 위치 저장.
     def on_amcl(self, msg):
         self.localized = msg.header.frame_id == frame_name(self, 'map')
 
+    # 메시지가 최신인지.
     def fresh(self, stamp):
         age = (self.get_clock().now().nanoseconds-rclpy.time.Time.from_msg(stamp).nanoseconds)/1e9
         return -0.1 <= age <= 0.5
 
+    # odom 으로 정지 상태 판단.
     def on_odom(self, msg):
         now = time.monotonic()
         v = msg.twist.twist
@@ -111,6 +124,7 @@ class StartPoseReader(Node):
             self.stationary_since = now
         self.odom_received = now
 
+    # 정지한 최신 위치를 제한 시간 안에 읽는다.
     def read_pose(self, timeout):
         deadline = time.monotonic() + timeout
         while rclpy.ok() and time.monotonic() < deadline:
@@ -134,6 +148,7 @@ class StartPoseReader(Node):
                            'RViz 초기 위치를 확인하세요. 설정 파일은 변경하지 않았습니다.')
 
 
+# 위치 읽기 → (미리보기 또는) 설정 저장.
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--namespace', default='', help='Robot namespace and TF frame prefix')

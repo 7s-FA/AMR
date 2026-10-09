@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: 로봇 운용 명령 모음. ready(전체 준비) / dock·park(도킹 시작) / stop·dock-stop(이동 중단, 모터 idle) /
+#       off(서비스 전체 정지) / status(서비스 상태).
+# 호출: operation.py(stop/ready), sequence_runner.py(dock/park, stop), 로봇 터미널.
+# dock/park: 이동 잠금 → 본체·카메라·도킹 대기 준비 → systemd 로 terminal_wrapper.sh + start_docking.sh 실행 → 시작 확인.
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")

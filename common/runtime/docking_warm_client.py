@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: 도킹 대기 작업자(docking_standby)에 요청 1건을 보내는 클라이언트. 수락된 요청은 재시도하지 않는다.
+# 실행: start_docking_engine.sh(도킹 시작/--check), camera_profile.sh(--profile active|idle).
+# 종료 코드: 0 성공, 1 실패, 2 대기 작업자 없음/코드 변경됨(→ 직접 실행 경로 사용).
+# ========================================================================
 """Execute one explicit docking request; never retry an accepted request."""
 import argparse,hashlib,json,os,socket,sys,time
 from pathlib import Path
 
+# 작업자 소켓·코드 해시 확인 → 요청 전송 → 결과 출력.
 def main():
  p=argparse.ArgumentParser();p.add_argument('robot');p.add_argument('--check',action='store_true');p.add_argument('--diagnose',action='store_true');p.add_argument('--log-dir');p.add_argument('--mode',choices=('normal','parking'),default='normal');p.add_argument('--profile',choices=('active','idle'));p.add_argument('--prepare',action='store_true');a=p.parse_args()
  path=Path(os.environ.get('XDG_RUNTIME_DIR','/run/user/'+str(os.getuid())))/(a.robot+'-docking-ready.sock')

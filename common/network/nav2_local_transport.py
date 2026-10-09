@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
+# ========================================================================
+# 역할: docking_network.py 가 만든 Fast DDS 프로필(XML)에 '같은 로봇 안 통신은 로컬(공유메모리)로' 설정을 추가한다.
+#       Wi-Fi 쪽 설정은 그대로 두고, 로봇 내부 Nav2 노드끼리의 대용량 통신만 로컬로 보낸다.
+# 실행: nav2_network.bash 의 configure_nav2_network 가 python3 nav2_local_transport.py <xml> 로 호출.
+# ========================================================================
 """Add local Nav2 transport while retaining the configured Wi-Fi transport."""
 import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
+# XML 을 읽어 로컬 전송(SHM) 설정을 추가하고 다시 저장.
 def enable_local_transport(path):
     path = Path(path)
     tree = ET.parse(path); root = tree.getroot()
     ns = root.tag.split('}')[0].lstrip('{') if root.tag.startswith('{') else ''
     if ns: ET.register_namespace('', ns)
+    # XML 네임스페이스가 붙은 태그 이름 만들기.
     def tag(name): return '{'+ns+'}'+name if ns else name
     descriptors = root.find(tag('transport_descriptors'))
     if descriptors is None: raise ValueError('Transport descriptors missing')

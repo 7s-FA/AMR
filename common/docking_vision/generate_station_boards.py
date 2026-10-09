@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: 버거1/2 주차 보드(마커 배치) 인쇄용 PDF 생성 도구. 운용 중에는 쓰지 않는다.
+# 실행: 수동 (reportlab 필요).
+# ========================================================================
 """Generate BURGER 1/2 parking boards using the existing docking geometry.
 
 Run from the workspace root:
@@ -24,6 +28,7 @@ PX_PER_MM = 10
 MARGIN_MM = 10
 
 
+# 보드 이미지를 실제 크기 PDF 로 저장.
 def create_pdf(path, title, config, marker_images):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -76,6 +81,7 @@ def create_pdf(path, title, config, marker_images):
     pdf.save()
 
 
+# 보드 정의 읽기 → 마커 이미지 → PDF.
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'docs/markers/charging_stations')

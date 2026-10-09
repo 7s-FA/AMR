@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Load paths belonging to this AMR runtime (also in systemd jobs).
+# ========================================================================
+# 역할: 주행 전 기본 준비. 본체(base)·모터 관리자·위치추정 서비스를 켜고 check_ready.py 로 위치추정 확인.
+# 호출: manage.sh, run_selected_waypoints.sh, rest.sh, run_rest.sh, ready_parallel.py, confirm_parked.sh(--force-parked).
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
 _amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
   _amr_dir=$(dirname "$_amr_dir")
