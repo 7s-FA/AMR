@@ -28,7 +28,7 @@
 |---|---|---|
 | GO_TO_MAT | mat | 일반 마커 도킹 |
 | GO_TO_ASM | asm | 일반 마커 도킹 |
-| GO_TO_REST | rest | 대기장소 IR 정지 |
+| GO_TO_REST | rest | 대기장소 거리 직진 정지 |
 | GO_TO_PARK | park | 로봇별 주차 마커 도킹 |
 | EMER_STOP | 진행 작업 중단 | 정지 래치 유지; 신선한 odom 정지 확인 후 성공 |
 | RESTART | 경로 실행 없음 | 로봇이 정지해 있고 작업 종료 후 래치만 해제 |
@@ -59,6 +59,6 @@ Action 취소·서버 종료·작업 실패도 정지 래치를 설정합니다.
 
 ## 종단 완료 근거
 
-경로의 끝 동작은 `config/routes.yaml`의 `terminal`에서 선택합니다. 일반/주차 도킹은 컨트롤러의 `DOCKED / ir_high_and_stationary` 보고가 필요합니다. REST는 IR HIGH 후 최신 odom(0.3초 이내)으로 0.5초 연속 정지를 확인해야 성공합니다. 정지 확인은 최대 3초이며 IR 해제·odom 끊김은 실패합니다. REST 속도와 제한은 `docking.yaml`의 독립된 `rest_control`에서 관리합니다. 프로세스 종료 코드 0만으로 도착 성공을 만들지 않습니다.
+경로의 끝 동작은 `config/routes.yaml`의 `terminal`에서 선택합니다. 일반/주차 도킹은 컨트롤러의 `DOCKED / encoder_distance_and_stationary` 보고가 필요합니다. REST는 정해진 거리(rest_control.distance_m)를 엔코더로 간 뒤 최신 odom(0.3초 이내)으로 0.5초 연속 정지를 확인해야 성공합니다(`RESTED / encoder_distance_and_stationary`). 정지 확인은 최대 3초이며 odom 끊김은 실패합니다. REST 속도와 제한은 `docking.yaml`의 독립된 `rest_control`에서 관리합니다. 프로세스 종료 코드 0만으로 도착 성공을 만들지 않습니다.
 
 [별도 테스트 호스트](../tools/test_host/README.md)도 같은 Action을 사용합니다.

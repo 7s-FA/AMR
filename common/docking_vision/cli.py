@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: 카메라 점검·보정 도구 (카메라 확인 → 체커보드 촬영 → 보정 계산 → ArUco 관측 확인). 운용 중에는 쓰지 않는다.
+# 실행: 수동. PYTHONPATH 에 카메라 폴더를 넣고 python3 -m docking_vision.cli <명령>.
+# ========================================================================
 """Camera check -> checkerboard capture -> calibration -> ArUco observations."""
 import argparse
 import json
@@ -15,6 +19,7 @@ from .board import BoardDetector, DockingBoard
 from .vision import Detector, board_corners, calibrate, load_calibration, make_marker, positive
 
 
+# 이미지 파일 저장.
 def write_image(path, image):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -22,6 +27,7 @@ def write_image(path, image):
         raise RuntimeError(f'Failed to save {path}')
 
 
+# 명령행 인자 정의.
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
     commands = p.add_subparsers(dest='command', required=True)
@@ -65,6 +71,7 @@ def parser():
     return p
 
 
+# 영상 스트림을 읽으며 검출 결과를 출력.
 def run_stream(args):
     positive(args.timeout, 'timeout')
     if args.show and not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
@@ -166,6 +173,7 @@ def run_stream(args):
             cv2.destroyAllWindows()
 
 
+# 명령 실행.
 def main(argv=None):
     args = parser().parse_args(argv)
     try:

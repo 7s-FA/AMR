@@ -19,11 +19,14 @@ class FakeBackend:
     def renew(self,goal_id):self.renewed+=1;return not self.estop
     def authorized(self,goal_id):return not self.estop
     def result(self,goal_id):return {'status':'success','stage':'arrived','result':{'success':True,'stopped':True,'dock_verified':self.submissions[-1][0]!='GO_TO_REST','terminal_verified':self.verified,'terminal_mode':'rest' if self.submissions[-1][0]=='GO_TO_REST' else 'dock'}} if self.done else {'status':'running'}
-    def stop(self,reason='stop'):self.estop=True;self.busy=False
+    def stop(self,reason='emergency_stop'):self.estop=self.estop or reason=='emergency_stop';self.busy=False
     def restart(self):
         assert not self.busy
         self.estop=False
     def finish(self,goal_id,success):self.busy=False
+    def reset_parked(self,goal_id):
+        assert not self.busy
+        self.parked=goal_id;return True
 
 def wait(f,timeout=5):
     end=time.monotonic()+timeout
@@ -63,8 +66,10 @@ def test_duplicate_goal_rejected_and_stop_preempts_then_restart_only_releases(ri
     release=goal(client,'RESTART',0.);assert release.accepted;assert wait(release.get_result_async()).result.success
     assert len(backend.submissions)==1 and not backend.estop
 
-def test_cancellation_stops_and_latches(rig):
-    backend,client,server=rig;g=goal(client,'GO_TO_REST');assert g.accepted;wait(g.cancel_goal_async());r=wait(g.get_result_async());assert r.status==5 and not r.result.success and backend.estop
+def test_cancellation_stops_without_latch(rig):
+    backend,client,server=rig;g=goal(client,'GO_TO_REST');assert g.accepted;wait(g.cancel_goal_async());r=wait(g.get_result_async());assert r.status==5 and not r.result.success and not backend.estop
+    # 취소 뒤에는 정지 해제 없이 새 명령을 바로 받는다.
+    time.sleep(.3);assert goal(client,'GO_TO_MAT').accepted
 
 def test_old_host_example_command_rejected(rig):
     backend,client,_=rig;assert not goal(client,'move_to_warehouse',1.5).accepted;assert not backend.submissions
@@ -92,3 +97,12 @@ def test_standalone_host_cli_end_to_end(rig):
     assert result.returncode==0,result.stdout+result.stderr
     assert '"success": true' in result.stdout
     assert backend.submissions[0][:2]==('GO_TO_ASM',50.)
+
+
+def test_reset_parked_control_action(rig):
+    backend,client,_=rig
+    g=goal(client,'RESET_PARKED',0.);assert g.accepted
+    assert wait(g.get_result_async()).result.success and backend.parked
+    # 이동 중에는 주차 복구를 받지 않는다.
+    route=goal(client,'GO_TO_MAT');assert route.accepted
+    assert not goal(client,'RESET_PARKED',0.).accepted

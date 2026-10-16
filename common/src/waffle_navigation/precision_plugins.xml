@@ -1,3 +1,6 @@
+<!--
+  역할: DWB 평가 플러그인(PositionApproachCritic, PrecisionPoseCritic)을 Nav2 에 등록하는 목록.
+-->
 <library path="precision_pose_critic">
   <class type="waffle_navigation::PositionApproachCritic" base_class_type="dwb_core::TrajectoryCritic">
     <description>Position-only steering with zero or effective forward speed.</description>

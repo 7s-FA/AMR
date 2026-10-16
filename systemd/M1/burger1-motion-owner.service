@@ -1,9 +1,12 @@
+# ========================================================================
+# 역할: 모터 명령 관리자 서비스 (launch_owner.sh).
+# ========================================================================
 [Unit]
 Description=burger1 persistent motion-owner
 
 [Service]
 Type=simple
-ExecStart=/bin/bash %h/final_robot_ws/robot/burger1/navigation/launch_owner.sh
+ExecStart=/bin/bash /home/ubuntu/final_robot_ws/robot/burger1/navigation/launch_owner.sh
 KillSignal=SIGINT
 TimeoutStopSec=20
 Restart=no

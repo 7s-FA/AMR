@@ -8,9 +8,9 @@ from test_directional_waypoints import route,ROOT,FakeNavigator
 def test_behavior_collision_checks_use_costmap_coordinates(mismatch):
  spec=importlib.util.spec_from_file_location('frame_validation',ROOT/'config/arrival_tuning.py')
  helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
- params=yaml.safe_load((ROOT/'config/nav2_burger2_params.yaml').read_text())
+ params=yaml.safe_load((ROOT/'config/nav2_burger1_params.yaml').read_text())
  if mismatch:
-  params['behavior_server']['ros__parameters'][f'{mismatch}_frame']='burger2/odom'
+  params['behavior_server']['ros__parameters'][f'{mismatch}_frame']='burger1/odom'
   with pytest.raises(ValueError,match='충돌검사 좌표계 불일치'):
    helper.validate_collision_frames(params)
  else:
@@ -47,7 +47,7 @@ int main(int argc,char**argv){
  assert(zero && positive && negative);
 }''')
  subprocess.run(['c++','-I/opt/ros/jazzy/include',str(src),'-o',str(exe)],check=True)
- p=yaml.safe_load((ROOT/'config/nav2_burger2_params.yaml').read_text())
+ p=yaml.safe_load((ROOT/'config/nav2_burger1_params.yaml').read_text())
  c=p['controller_server']['ros__parameters']['FollowPositionForward']
  subprocess.run([str(exe)]+[str(c[k]) for k in ['max_vel_theta','acc_lim_theta','decel_lim_theta','sim_time','vtheta_samples']],check=True)
  assert 'BaseObstacle' in c['critics']
@@ -62,11 +62,11 @@ def test_velocity_graph_discovery_is_bounded_and_checks_identity(monkeypatch,kin
  monkeypatch.setattr(route.rclpy,'ok',lambda:True)
  monkeypatch.setattr(route.rclpy,'spin_once',lambda n,timeout_sec:clock.__setitem__(0,clock[0]+timeout_sec))
  def endpoints(topic):
-  assert topic.startswith('/burger2/')
+  assert topic.startswith('/burger1/')
   if kind=='missing' or clock[0]<.2:return []
   name='velocity_smoother' if topic.endswith('cmd_vel_nav') else 'collision_monitor'
-  return [SimpleNamespace(node_name=name,node_namespace='/burger1' if kind=='wrong_namespace' else '/burger2',topic_type='geometry_msgs/msg/Twist' if kind=='wrong_type' else 'geometry_msgs/msg/TwistStamped')]
- n=SimpleNamespace(get_namespace=lambda:'/burger2',get_subscriptions_info_by_topic=endpoints)
+  return [SimpleNamespace(node_name=name,node_namespace='/burger2' if kind=='wrong_namespace' else '/burger1',topic_type='geometry_msgs/msg/Twist' if kind=='wrong_type' else 'geometry_msgs/msg/TwistStamped')]
+ n=SimpleNamespace(get_namespace=lambda:'/burger1',get_subscriptions_info_by_topic=endpoints)
  if kind=='delayed':
   route.WaypointNavigator._wait_for_velocity_connections(n,timeout=.5)
   assert .2<=clock[0]<.5

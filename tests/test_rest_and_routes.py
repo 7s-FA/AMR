@@ -14,7 +14,7 @@ from client import request_values
 def test_rest_settings_are_independent():
     cfg = yaml.safe_load((ROOT/'M2/config/docking.yaml').read_text())
     cfg['control']['final_speed_mps'] = 99
-    assert settings(cfg)['speed_mps'] == .039
+    assert settings(cfg)['speed_mps'] == .0351
     cfg['rest_control']['odom_timeout_s'] = 2
     with pytest.raises(ValueError): settings(cfg)
 
@@ -39,7 +39,7 @@ def test_replayed_stale_moving_invalid_odom_resets_hold(stamp,age,v,w):
 @pytest.mark.parametrize('mode,state', [('dock','DOCKED'), ('park','DOCKED'), ('rest','RESTED')])
 def test_arrival_evidence_requires_controller_confirmation(tmp_path,mode,state):
     log=tmp_path/'log'
-    log.write_text(json.dumps({'state':state,'reason':'ir_high_and_stationary','stopped':True,'ir_high':True})+'\n')
+    log.write_text(json.dumps({'state':state,'reason':'encoder_distance_and_stationary','stopped':True})+'\n')
     evidence=terminal_result(mode,0,log)
     proof=arrival_result(mode,evidence)
     assert proof['terminal_verified'] and proof['dock_verified']==(mode!='rest')
@@ -80,10 +80,11 @@ def test_wrapper_only_sets_departure_flag_with_verified_stop(tmp_path,verified):
     for name in ('terminal_wrapper.sh','terminal_evidence.py'):shutil.copy2(ROOT/'common/navigation'/name,nav/name)
     (nav/'set_mode.sh').write_text('exit 0\n')
     controller=tmp_path/'controller.sh'
-    controller.write_text("echo '"+json.dumps({'state':'RESTED','reason':'ir_high_and_stationary','stopped':verified,'ir_high':True})+"'\n")
+    controller.write_text("echo '"+json.dumps({'state':'RESTED','reason':'encoder_distance_and_stationary','stopped':verified})+"'\n")
     result=subprocess.run(['bash',str(nav/'terminal_wrapper.sh'),'rest',str(controller)],capture_output=True,text=True)
     assert (result.returncode==0)==verified
-    assert (tmp_path/'data/burger2/departure_pending').exists()==verified
+    flag=(tmp_path/'data/burger2/departure_pending').read_text()
+    assert flag.startswith('successful_rest' if verified else 'terminal_started_rest')
 
 
 def test_odom_age_includes_transport_delay():

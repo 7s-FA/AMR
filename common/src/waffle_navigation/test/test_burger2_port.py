@@ -9,10 +9,10 @@ from test_directional_waypoints import FakeNavigator, ROOT, route
 
 
 def test_robot_has_four_forward_points_and_no_reverse_controller():
-    points = yaml.safe_load((ROOT / 'config/waypoints_burger2.yaml').read_text())['waypoints']
+    points = yaml.safe_load((ROOT / 'config/waypoints_burger1.yaml').read_text())['waypoints']
     assert len(points) == 4
     assert all(point['mode'] == 'forward' for point in points)
-    params = yaml.safe_load((ROOT / 'config/nav2_burger2_params.yaml').read_text())
+    params = yaml.safe_load((ROOT / 'config/nav2_burger1_params.yaml').read_text())
     controller = params['controller_server']['ros__parameters']
     assert controller['controller_plugins'] == ['FollowPath', 'FollowPositionForward']
     assert 'precision_goal_checker' not in controller['goal_checker_plugins']
@@ -23,20 +23,20 @@ def test_robot_has_four_forward_points_and_no_reverse_controller():
 
 @pytest.mark.parametrize('selection,count', [('1', 1), ('2', 1), ('3', 1), ('4', 1), ('12', 2)])
 def test_numbered_shortcuts_validate_without_motion(selection, count):
-    script = ROOT.parents[2] / 'robot/burger2/navigation/run_selected_waypoints.sh'
+    script = ROOT.parents[2] / 'robot/burger1/navigation/run_selected_waypoints.sh'
     if not script.is_file():
         pytest.skip('Robot workspace layout required; host shell branches have a separate hermetic regression suite')
     result = subprocess.run(['bash', str(script), selection, '--dry-run'],
                             capture_output=True, text=True, check=True)
     assert result.stdout.count('mode=forward') == count
     assert 'mode=reverse' not in result.stdout
-    pending = ROOT.parents[2] / 'data/burger2/departure_pending'
+    pending = ROOT.parents[2] / 'data/burger1/departure_pending'
     if pending.exists():
         assert '0.15 m' in result.stdout and '180°' in result.stdout
     else:
         assert '출차 동작 생략' in result.stdout
     assert '최종 방향 목표 허용오차: 3°' in result.stdout
-    assert '각 좌표까지 Nav2 전진 피드백 주행 → 정지 → 해당 목표 yaw 회전' in result.stdout
+    assert '중간 통로는 위치 확인 후 다음 경로 → 최종 지점만 목표 yaw 정렬' in result.stdout
     assert '5cm 이내 저속 XY/yaw 동시 보정' not in result.stdout
     assert '최종 진입점:' not in result.stdout
     assert '마지막 접근 전환:' not in result.stdout

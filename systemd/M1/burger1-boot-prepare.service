@@ -1,0 +1,13 @@
+# 역할: 전원을 켜면 버거1 관제 준비를 스스로 한 번 실행 (boot_prepare.sh, 이동 명령 없음). 2026-10-11 추가.
+[Unit]
+Description=burger1 boot-time control preparation (no motion goals)
+After=burger1-host-ready.service burger1-nav-control.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/ubuntu/final_robot_ws/robot/burger1/navigation/boot_prepare.sh
+TimeoutStartSec=30min
+KillSignal=SIGINT
+
+[Install]
+WantedBy=default.target

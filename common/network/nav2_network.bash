@@ -1,3 +1,14 @@
+# ========================================================================
+# 역할: configure_nav2_network 함수. docking.yaml 의 Wi-Fi 인터페이스로 DDS 프로필(data/<로봇>/dds_nav2.xml)을 만들고
+#       로컬 공유메모리 전송을 추가해 FASTRTPS_DEFAULT_PROFILES_FILE 로 지정한다. 사용처: launch_*.sh, nav_env.bash.
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Sourced after handoff/pc_burger{1,2}_env.bash on the robot.
 # Match the base's UDP-only interface profile; do not start any ROS process.
 configure_nav2_network() {
@@ -14,9 +25,9 @@ configure_nav2_network() {
     echo "Unsupported Nav2 robot: $robot_id" >&2
     return 1
   fi
-  local default_base_dir="$HOME/final_robot_camera_$robot_id"
+  local default_base_dir="${AMR_CAMERA}"
   if [[ "$robot_id" == burger2 ]]; then
-    default_base_dir="$HOME/final_robot_camera"
+    default_base_dir="${AMR_CAMERA}"
   fi
   local base_dir="${BURGER_NAV2_BASE_DIR:-$default_base_dir}"
   if [[ ! -f "$base_dir/docking_network.py" || ! -f "$base_dir/docking.yaml" ]]; then

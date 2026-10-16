@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
+# ========================================================================
+# 역할: 본체 드라이버 실행 (모터/odom·라이다). burger2-base.service 의 본체. Nav2·속도 명령 없음.
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Motor/odometry driver only; this does not start Nav2 or issue velocity commands.
 set -eo pipefail
 source /opt/ros/jazzy/setup.bash
-source "$HOME/turtlebot3_ws/install/setup.bash"
+if [[ -f "$HOME/turtlebot3_ws/install/setup.bash" ]]; then source "$HOME/turtlebot3_ws/install/setup.bash"; fi
 export ROS_DOMAIN_ID="${BURGER2_ROS_DOMAIN_ID:-40}"
 export TURTLEBOT3_MODEL=burger
 export LDS_MODEL="${LDS_MODEL:-LDS-02}"

@@ -1,3 +1,7 @@
+// ========================================================================
+// 역할: Nav2 DWB 컨트롤러 평가 플러그인 PrecisionPoseCritic (우리 코드). 목표 5cm 앞까지 전진하며 자세를 함께 평가하고
+//       정밀 정지를 유지한다. 계산은 precision_pose.hpp. Nav2 controller_server 가 불러 쓴다 (precision_plugins.xml).
+// ========================================================================
 #include "waffle_navigation/precision_pose.hpp"
 #include "dwb_core/trajectory_critic.hpp"
 #include "dwb_core/exceptions.hpp"

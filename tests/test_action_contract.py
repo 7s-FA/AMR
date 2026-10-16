@@ -6,7 +6,7 @@ sys.path[:0]=[str(ROOT/'common/navigation'),str(ROOT/'common/src/amr_mission')]
 from action_gate import gate_output,departure_speed
 from amr_mission.backend import validate,ROUTES
 
-@pytest.mark.parametrize('command',list(ROUTES)+['EMER_STOP','RESTART'])
+@pytest.mark.parametrize('command',list(ROUTES)+['EMER_STOP','RESTART','RESET_PARKED'])
 def test_commands(command):validate(command,100.)
 @pytest.mark.parametrize('command,speed',[('move_to_warehouse',100),('GO_TO_MAT',0),('GO_TO_ASM',-1),('GO_TO_ASM',101),('GO_TO_ASM',float('nan')),('GO_TO_ASM',float('inf'))])
 def test_bad_commands(command,speed):

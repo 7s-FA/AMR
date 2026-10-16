@@ -29,9 +29,23 @@ def test_goal_uuid_is_mission_id_and_renewal_never_clears_estop(backend):
     backend.stop();assert not backend.renew('goal-001')
     backend.finish('goal-001',True);assert backend.load_gate(backend.path)['estop']
 
-def test_server_restart_latches_unfinished_goal(backend):
+def test_server_restart_revokes_unfinished_goal_without_latch(backend):
     backend.submit('GO_TO_PARK',100.,'old-goal')
-    b=Backend(backend.nav);assert b.load_gate(b.path)['estop']
+    b=Backend(backend.nav);gate=b.load_gate(b.path)
+    assert not gate['estop'] and gate['goal_id'] is None and not b.authorized('old-goal')
+
+def test_only_emergency_stop_latches(backend):
+    # 취소·실패·종료는 이동만 멈추고 정지 래치를 걸지 않는다.
+    for reason in ('action_cancelled','action_failed','action_server_shutdown'):
+        backend.submit('GO_TO_ASM',50.,'goal-'+reason)
+        backend.stop(reason);gate=backend.load_gate(backend.path)
+        assert not gate['estop'] and gate['goal_id'] is None
+        backend.finish('goal-'+reason,False);assert not backend.load_gate(backend.path)['estop']
+    # EMER_STOP 은 래치를 걸고, 이후 실패 정리로도 풀리지 않는다. RESTART 로만 풀린다.
+    backend.stop();backend.stop('action_failed');backend.finish('x',False)
+    assert backend.load_gate(backend.path)['estop']
+    with pytest.raises(RuntimeError,match='ESTOP_LATCHED'):backend.preflight()
+    backend.restart();assert not backend.load_gate(backend.path)['estop']
 
 def test_individual_mode_rejects_host_submit(backend):
     backend.atomic(backend.op.data/'operation_mode.json',{'mode':'individual'})
@@ -46,3 +60,18 @@ def test_authorization_read_does_not_renew_or_clear_latch(backend):
     assert backend.path.read_bytes()==before
     backend.stop()
     assert not backend.authorized('goal-read')
+
+
+def test_reset_parked_runs_parked_preparation_without_touching_latch(backend,monkeypatch):
+    import amr_mission.backend as module
+    calls=[]
+    def run(command,**kwargs):
+        calls.append(command);return subprocess.CompletedProcess(command,0,'ready','')
+    monkeypatch.setattr(module.subprocess,'run',run)
+    backend.stop()  # 긴급정지 래치는 주차 복구로 풀리지 않는다.
+    assert backend.reset_parked('goal-park')
+    assert calls[-1][-3:]==[str(backend.nav),backend.op.robot,'parked-goal-park']
+    assert '--parked' in calls[-1][2] and backend.load_gate(backend.path)['estop']
+    def fail(command,**kwargs):return subprocess.CompletedProcess(command,1,'','RuntimeError: 이동 중')
+    monkeypatch.setattr(module.subprocess,'run',fail)
+    with pytest.raises(RuntimeError,match='PARKED_RESET_FAILED'):backend.reset_parked('goal-2')

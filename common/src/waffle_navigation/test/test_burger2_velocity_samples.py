@@ -5,7 +5,7 @@ import yaml
 from test_directional_waypoints import ROOT
 
 
-@pytest.mark.parametrize('robot', ['burger2','burger1'])
+@pytest.mark.parametrize('robot', ['burger1','burger2'])
 def test_forward_sampler_preserves_rotation_but_filters_stalled_translation(tmp_path, robot):
     p = yaml.safe_load((ROOT/f'config/nav2_{robot}_params.yaml').read_text())
     c = p['controller_server']['ros__parameters']['FollowPositionForward']

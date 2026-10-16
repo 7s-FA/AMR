@@ -1,11 +1,29 @@
 # AMR — M1 · M2 로봇 주행과 도킹
 
-M1(기존 Burger1), M2(기존 Burger2) **로봇 내부에서 실행하는 코드**입니다. 호스트가 목적지 명령을 보내면 로봇이 저장된 웨이포인트를 따라 이동하고, 목적지에 맞게 마커 도킹 또는 대기장소 IR 정지를 수행합니다.
+> **2026-10-06 로봇 백업 이식본 (미커밋·실주행 검증 전).** 두 로봇에 이 AMR 폴더 전체를 동일하게 복사합니다.
+> 버거1 로직을 기준으로 M1/M2 프로필을 선택하며, 새 설치·실행 방법은 **[단일 폴더 사용법](docs/single_folder.md)**을 따르세요.
+> 기존 Git의 디렉터리 역할과 `scripts/robot.py` 진입점을 유지합니다. 아래 설치 명령도 현재 구조에 맞췄습니다.
+
+```bash
+cd ~/AMR
+python3 scripts/robot.py --robot M1 configure        # 버거2에서는 M2
+python3 scripts/robot.py --robot M1 build
+python3 scripts/robot.py --robot M1 camera-build
+# 기존 로봇 서비스가 정지한 상태에서만 등록/전환
+python3 scripts/robot.py --robot M1 install-services --replace
+python3 scripts/robot.py --robot M1 doctor
+```
+
+처음 빌드에는 ROS 2 Jazzy/Nav2/TurtleBot3 의존성이 필요합니다. Pi 카메라는 `camera-build`가 AMR 내부에 설치·빌드합니다.
+위 명령은 주행을 시작하지 않습니다. 라이브 준비와 Host 연결은 단일 폴더 사용법을 확인하세요.
+
+M1(버거3: STM32 F411 + micro-ROS, 이름은 burger1), M2(버거2: OpenCR) **로봇 내부에서 실행하는 코드**입니다. 호스트가 목적지 명령을 보내면 로봇이 저장된 웨이포인트를 따라 이동하고, 목적지에 맞게 마커 도킹 또는 대기장소 거리 직진을 수행합니다. 2026-10-16부터 IR 센서는 쓰지 않습니다. 도킹 마지막 직진은 엔코더 거리로 멈춥니다(버거3는 STM32 펄스 이동). 자세한 내용은 [docs/encoder_docking_2026-10-16.md](docs/encoder_docking_2026-10-16.md).
 
 별도 주행 시험용 간단한 CLI는 [tools/test_host](tools/test_host/README.md)에 있습니다. `M2 asm`, `M1 park`처럼 한 경로씩 보낼 수 있습니다.
 
-호스트의 웹·공정 스케줄러·운영 Action Client는 별도 [host_pc 저장소](https://github.com/7s-FA/host_pc)에서 관리합니다. 이 저장소의 작업 브랜치는 `jh`이며, F1(와플)·M3의 기존 영역은 유지합니다.
+호스트의 웹·공정 스케줄러·운영 Action Client는 별도 [host_pc 저장소](https://github.com/7s-FA/host_pc)에서 관리합니다. 이 저장소의 작업 브랜치는 `jh`입니다.
 
+- **[코드 안내 (우리 코드·원본 구분, 2026-10-09 정리·최적화 내역)](docs/code_guide_2026-10-09.md)**
 - [로봇 구분과 동작 흐름](#로봇-구분과-동작-흐름)
 - [파일 구조와 수정 위치](#파일-구조와-수정-위치)
 - [명세서와 통신 규약](#명세서와-통신-규약)
@@ -32,7 +50,7 @@ M1(기존 Burger1), M2(기존 Burger2) **로봇 내부에서 실행하는 코드
                                                 ↓
 호스트 연동: Burger Action → 명령 검증 → 작업 접수 → 웨이포인트 주행
                                                 ↓
-                              마커 도킹 / 대기장소 IR 정지
+                              마커 도킹 / 대기장소 거리 직진
                                                 ↓
                               종단 정지 검증 → 완료 결과·로그
 ```
@@ -55,10 +73,9 @@ AMR/
 │   ├── config/                       # 로봇 ID·Nav2·경로·도킹·카메라
 │   ├── image/                        # 이미지 참고 자료용
 │   ├── map/                          # 지도 PGM/YAML
-│   ├── overrides/waffle_navigation/   # 공통 패키지와 다른 M1 파일
 │   ├── runtime_env/                  # 기존 환경 파일 이름 호환
 │   ├── src/navigation/               # M1 실행 스크립트
-│   ├── src/runtime/                  # M1 카메라·도킹·IR 구현
+│   ├── src/runtime/                  # M1 장치 실행·프로필별 구현
 │   └── runtime_manifest.json         # 원본 → 실행 경로 및 SHA-256
 ├── M2/                               # M2 설정과 개별 구현
 │   ├── config/
@@ -72,7 +89,7 @@ AMR/
 ├── M3/                               # 기존 image/src/map 유지
 ├── common/
 │   ├── navigation/                   # 작업 접수·모드·제어권·정지·속도 제한
-│   ├── runtime/                      # 공통 도킹 제어
+│   ├── runtime/                      # 공통 도킹·카메라 구현
 │   ├── docking_vision/               # 마커 검출·보드·비전 설정
 │   ├── network/                      # 로봇 ROS 통신 환경
 │   └── src/
@@ -115,60 +132,47 @@ AMR/
 │   │   ├── .gitkeep
 │   │   ├── factory_map.pgm
 │   │   └── factory_map.yaml
-│   ├── overrides/
-│   │   └── waffle_navigation/
-│   │       ├── config/
-│   │       │   └── waypoints.yaml
-│   │       ├── launch/
-│   │       │   ├── burger1_navigation.launch.py
-│   │       │   └── burger2_navigation.launch.py
-│   │       ├── scripts/
-│   │       │   └── nav2_waypoints.py
-│   │       └── test/
-│   │           ├── test_arrival_recovery.py
-│   │           ├── test_burger2_port.py
-│   │           ├── test_burger2_velocity_samples.py
-│   │           ├── test_directional_waypoints.py
-│   │           ├── test_large_heading_alignment.py
-│   │           ├── test_position_then_yaw.py
-│   │           └── test_precision_tuning.py
 │   ├── runtime_env/
-│   │   ├── burger1_remote.bash
 │   │   ├── pc_burger1_env.bash
 │   │   └── pc_env.bash
 │   ├── src/
 │   │   ├── navigation/
 │   │   │   ├── ensure_docking_ready.sh
+│   │   │   ├── ensure_rest_ready.sh
+│   │   │   ├── ensure_waypoint_ready.sh
 │   │   │   ├── launch_localization.sh
 │   │   │   ├── launch_nav2.sh
 │   │   │   ├── launch_owner.sh
 │   │   │   ├── manage.sh
 │   │   │   ├── mission_entry.sh
-│   │   │   ├── operator_aliases.bash
+│   │   │   ├── mission_retry.json
+│   │   │   ├── rest_ready_worker.py
+│   │   │   ├── retry_ready.py
 │   │   │   ├── run_rest.sh
 │   │   │   ├── run_selected_waypoints.sh
 │   │   │   ├── run_waypoints.sh
 │   │   │   ├── save_start_pose.sh
 │   │   │   ├── set_mode.sh
-│   │   │   └── warm.sh
+│   │   │   ├── start_host_ready.sh
+│   │   │   ├── start_rest_ready.sh
+│   │   │   ├── start_waypoint_worker.sh
+│   │   │   ├── warm.sh
+│   │   │   ├── waypoint_client.py
+│   │   │   └── waypoint_worker.py
 │   │   ├── runtime/
-│   │   │   ├── base.launch.py
+│   │   │   ├── base.launch.py          # 버거3 STM32 본체 (브리지·odom·라이다·호환 노드)
 │   │   │   ├── camera_profile.sh
-│   │   │   ├── docking_node.py
-│   │   │   ├── docking_recorder.py
-│   │   │   ├── docking_vision_worker.py
-│   │   │   ├── ir_sensor.py
+│   │   │   ├── check_base.sh           # 버거3 본체 점검 (읽기만)
+│   │   │   ├── cmd_throttle.py         # STM32 로 가는 속도 명령 15Hz 이하로
 │   │   │   ├── setup_camera.sh
-│   │   │   ├── start_base.sh
+│   │   │   ├── start_base.sh           # micro-ROS Agent → STM32 리셋 → base.launch.py
 │   │   │   ├── start_camera.sh
 │   │   │   ├── start_docking.sh
 │   │   │   ├── start_docking_engine.sh
 │   │   │   ├── start_docking_standby.sh
-│   │   │   ├── start_ir.sh
-│   │   │   ├── test_docking_control.py
-│   │   │   ├── test_docking_node.py
+│   │   │   ├── stm32_compat.py         # OpenCR 대체 sensor_state·motor_power
 │   │   │   ├── test_docking_recorder.py
-│   │   │   └── test_ported_alignment.py
+│   │   │   └── wheel_odom.py           # 바퀴 거리 + IMU 회전 odom
 │   │   └── .gitkeep
 │   ├── README.md
 │   └── runtime_manifest.json
@@ -189,38 +193,41 @@ AMR/
 │   │   ├── factory_map.pgm
 │   │   └── factory_map.yaml
 │   ├── runtime_env/
-│   │   ├── burger2_remote.bash
 │   │   ├── pc_burger2_env.bash
 │   │   └── pc_env.bash
 │   ├── src/
 │   │   ├── navigation/
 │   │   │   ├── ensure_docking_ready.sh
+│   │   │   ├── ensure_rest_ready.sh
+│   │   │   ├── ensure_waypoint_ready.sh
 │   │   │   ├── launch_localization.sh
 │   │   │   ├── launch_nav2.sh
 │   │   │   ├── launch_owner.sh
 │   │   │   ├── manage.sh
 │   │   │   ├── mission_entry.sh
-│   │   │   ├── motion_trace.py
-│   │   │   ├── operator_aliases.bash
+│   │   │   ├── mission_retry.json
+│   │   │   ├── rest_ready_worker.py
+│   │   │   ├── retry_ready.py
 │   │   │   ├── run_rest.sh
 │   │   │   ├── run_selected_waypoints.sh
 │   │   │   ├── run_waypoints.sh
 │   │   │   ├── save_start_pose.sh
 │   │   │   ├── set_mode.sh
-│   │   │   └── warm.sh
+│   │   │   ├── start_host_ready.sh
+│   │   │   ├── start_rest_ready.sh
+│   │   │   ├── start_waypoint_worker.sh
+│   │   │   ├── warm.sh
+│   │   │   ├── waypoint_client.py
+│   │   │   └── waypoint_worker.py
 │   │   ├── runtime/
 │   │   │   ├── base.launch.py
 │   │   │   ├── camera_profile.sh
-│   │   │   ├── docking_node.py
-│   │   │   ├── docking_vision_worker.py
-│   │   │   ├── ir_sensor.py
 │   │   │   ├── setup_camera.sh
 │   │   │   ├── start_base.sh
 │   │   │   ├── start_camera.sh
 │   │   │   ├── start_docking.sh
 │   │   │   ├── start_docking_engine.sh
 │   │   │   ├── start_docking_standby.sh
-│   │   │   ├── start_ir.sh
 │   │   │   ├── test_docking_control.py
 │   │   │   └── test_docking_node.py
 │   │   └── .gitkeep
@@ -242,17 +249,21 @@ AMR/
 │   │   ├── docking_config.py
 │   │   ├── generate_station_boards.py
 │   │   ├── source.py
-│   │   ├── viewer.py
 │   │   └── vision.py
 │   ├── navigation/
 │   │   ├── action_gate.py
 │   │   ├── capture_nav2_failure.py
 │   │   ├── check_ready.py
+│   │   ├── communication_guard.py
 │   │   ├── confirm_parked.sh
+│   │   ├── data_flow.py
 │   │   ├── ensure_camera.sh
+│   │   ├── host_prepare.py
 │   │   ├── localization_only.launch.py
+│   │   ├── localization_ready.py
 │   │   ├── mission.sh
 │   │   ├── mission_guard.sh
+│   │   ├── mission_retry.py
 │   │   ├── motion_client.py
 │   │   ├── motion_mode.py
 │   │   ├── motion_owner.py
@@ -260,12 +271,12 @@ AMR/
 │   │   ├── nav_env.bash
 │   │   ├── operation.py
 │   │   ├── ready_monitor.py
+│   │   ├── ready_parallel.py
 │   │   ├── ready_watch.sh
 │   │   ├── rest.sh
 │   │   ├── rest_forward.py
-│   │   ├── run_waypoints_record.sh
 │   │   ├── sequence_runner.py
-│   │   ├── start_nav2.sh
+│   │   ├── startup_state.py
 │   │   ├── station_routes.py
 │   │   ├── terminal_evidence.py
 │   │   ├── terminal_wrapper.sh
@@ -274,12 +285,17 @@ AMR/
 │   │   ├── nav2_local_transport.py
 │   │   └── nav2_network.bash
 │   ├── runtime/
-│   │   ├── communication_guard.py
+│   │   ├── camera_ipc.py
 │   │   ├── docking_control.py
 │   │   ├── docking_network.py
+│   │   ├── docking_node.py
+│   │   ├── docking_recorder.py
 │   │   ├── docking_standby.py
+│   │   ├── docking_vision_worker.py
 │   │   ├── docking_warm_client.py
-│   │   └── test_docking_recovery.py
+│   │   ├── native_camera.cpp
+│   │   ├── test_docking_recovery.py
+│   │   └── video_http.py
 │   ├── runtime_env/
 │   │   ├── ros_setup_cache.py
 │   │   └── ros_setup_fast.bash
@@ -301,34 +317,32 @@ AMR/
 │           │   └── navigate_reverse.xml
 │           ├── config/
 │           │   ├── arrival_tuning.py
-│           │   ├── mapper_params.yaml
-│           │   ├── nav2_burger_params.yaml
-│           │   ├── nav2_params.yaml
-│           │   └── waypoints.yaml
+│           │   └── nav2_burger_params.yaml
 │           ├── include/
 │           │   └── waffle_navigation/
 │           │       ├── position_approach.hpp
-│           │       └── precision_pose.hpp
+│           │       ├── precision_pose.hpp
+│           │       └── precision_spin_speed.hpp
 │           ├── launch/
 │           │   ├── burger1_navigation.launch.py
 │           │   ├── burger2_navigation.launch.py
-│           │   ├── map_building.launch.py
-│           │   ├── map_view.launch.py
-│           │   └── navigation2.launch.py
+│           │   ├── lean_bringup_launch.py
+│           │   └── lean_navigation_launch.py
 │           ├── rviz/
 │           │   ├── burger1_navigation.rviz
-│           │   ├── burger2_navigation.rviz
-│           │   └── map_building.rviz
+│           │   └── burger2_navigation.rviz
 │           ├── scripts/
 │           │   ├── nav2_waypoints.py
-│           │   ├── normalize_scan.py
 │           │   └── save_start_pose.py
 │           ├── src/
 │           │   ├── position_approach_critic.cpp
-│           │   └── precision_pose_critic.cpp
+│           │   ├── precision_pose_critic.cpp
+│           │   └── precision_spin.cpp
 │           ├── test/
 │           │   ├── position_approach_selftest.cpp
 │           │   ├── precision_pose_selftest.cpp
+│           │   ├── precision_spin_loadtest.cpp
+│           │   ├── precision_spin_selftest.cpp
 │           │   ├── test_arrival_recovery.py
 │           │   ├── test_burger2_port.py
 │           │   ├── test_burger2_velocity_samples.py
@@ -347,6 +361,7 @@ AMR/
 │           │   └── velocity_samples.cpp
 │           ├── CMakeLists.txt
 │           ├── package.xml
+│           ├── precision_behaviors.xml
 │           └── precision_plugins.xml
 ├── docs/
 │   ├── images/
@@ -359,9 +374,11 @@ AMR/
 │   ├── commands.md
 │   ├── communication_sync_2026-10-01.md
 │   ├── host_interface.md
+│   ├── host_startup_2026-10-02.md
 │   ├── known_issues.md
 │   ├── namespace_terminal_update_2026-10-01.md
 │   ├── robot_sync_2026-10-01.md
+│   ├── single_folder.md
 │   ├── troubleshooting.md
 │   └── validation.md
 ├── interfaces/
@@ -386,18 +403,25 @@ AMR/
 │       └── joint_state.patch
 ├── scripts/
 │   ├── build.sh
+│   ├── build_camera.sh
+│   ├── doctor.py
 │   ├── materialize.py
+│   ├── repair_install_links.py
 │   ├── robot.py
 │   └── update_manifest.py
 ├── systemd/
 │   ├── M1/
+│   │   ├── burger1-host-ready.service
 │   │   ├── burger1-localization.service
 │   │   ├── burger1-motion-owner.service
-│   │   └── burger1-nav2.service
+│   │   ├── burger1-nav2.service
+│   │   └── burger1-waypoint-ready.service
 │   └── M2/
+│       ├── burger2-host-ready.service
 │       ├── burger2-localization.service
 │       ├── burger2-motion-owner.service
-│       └── burger2-nav2.service
+│       ├── burger2-nav2.service
+│       └── burger2-waypoint-ready.service
 ├── tests/
 │   ├── test_action_contract.py
 │   ├── test_action_ros.py
@@ -406,13 +430,9 @@ AMR/
 │   ├── test_packaging.py
 │   ├── test_reference_host_ros.py
 │   ├── test_rest_and_routes.py
+│   ├── test_single_folder.py
 │   └── test_synced_docking.py
 ├── tools/
-│   ├── legacy_camera/
-│   │   ├── M1/
-│   │   │   ├── camera_node.py
-│   │   │   └── test_camera_node.py
-│   │   └── README.md
 │   └── test_host/
 │       ├── README.md
 │       ├── build.sh
@@ -438,7 +458,7 @@ AMR/
 | Action 처리·기존 작업 실행 연결 | `common/src/amr_mission/amr_mission/action_server.py`, `backend.py` |
 | 공통 작업 접수·제어권·속도/정지 제한 | `common/navigation/operation.py`, `motion_owner.py`, `action_gate.py` |
 
-프로필 원본의 실행 스크립트를 직접 실행하지 않습니다. `scripts/materialize.py`가 공통 코드와 해당 로봇 프로필을 조합해 실행 디렉터리를 만듭니다. 수정 후에는 `scripts/update_manifest.py`로 해시를 갱신하고 새 경로에 다시 구성·빌드합니다.
+프로필 원본의 실행 스크립트를 직접 실행하지 않습니다. 기존 `scripts/robot.py`의 `--robot M1` 또는 `--robot M2`로 선택하며, `configure`는 `scripts/materialize.py`를 통해 `.runtime`에 소스를 연결합니다. 기존 `--runtime 경로` 명령도 유지합니다. 파일 추가 시 manifest를 갱신하고 재구성하며, ROS 패키지 변경은 재빌드합니다.
 
 실행 결과에 생성되는 `final_robot_ws/host_ws`와 `handoff`는 기존 경로 호환용입니다. 여기에는 **로봇에서 사용하는 ROS 패키지와 환경 설정**이 들어갑니다. 호스트 PC용 웹·공정 코드·RViz 실행 도구는 이 저장소에 포함하지 않습니다.
 
@@ -463,7 +483,7 @@ AMR/
 |---|---|---|
 | `GO_TO_MAT` | `mat` | 재료 창고 → 일반 마커 도킹 |
 | `GO_TO_ASM` | `asm` | 조립대 → 일반 마커 도킹 |
-| `GO_TO_REST` | `rest` | 대기장소 → IR 정지 |
+| `GO_TO_REST` | `rest` | 대기장소 → 거리 직진 정지 |
 | `GO_TO_PARK` | `park` | 로봇별 주차장 → 주차 마커 도킹 |
 | `EMER_STOP` | — | 현재 작업 중단·정지 래치 설정 |
 | `RESTART` | — | 정지 확인 후 래치 해제. 경로 재개 없음 |
@@ -482,7 +502,7 @@ PC에서 별도 주행 시험을 하려면 [간단한 테스트 호스트 안내
 
 ### 1. 저장소와 실행 대상 선택
 
-Ubuntu 24.04 / ROS 2 Jazzy, `colcon`, Python YAML 모듈과 해당 로봇의 `~/turtlebot3_ws/install/setup.bash`가 필요합니다.
+Ubuntu 24.04 / ROS 2 Jazzy, Nav2·TurtleBot3 드라이버, `colcon`, Python YAML 등이 필요합니다. 드라이버가 `~/turtlebot3_ws`에 설치되어 있으면 해당 overlay를 사용합니다.
 
 처음 내려받을 때만:
 
@@ -494,7 +514,7 @@ git clone --branch jh https://github.com/7s-FA/AMR.git "$HOME/AMR"
 
 ```bash
 ROBOT_ID=M2
-AMR_RUNTIME="$HOME/amr_runtime/$ROBOT_ID"
+AMR_RUNTIME="$HOME/AMR/.runtime/$ROBOT_ID"
 AMR_ACTION="/$ROBOT_ID/data"
 if [[ "$ROBOT_ID" == M1 ]]; then
   RUNTIME_ROBOT=burger1
@@ -504,7 +524,7 @@ else
   AMR_CAMERA=final_robot_camera
 fi
 cd "$HOME/AMR"
-amr() { python3 "$HOME/AMR/scripts/robot.py" --runtime "$AMR_RUNTIME" "$@"; }
+amr() { python3 "$HOME/AMR/scripts/robot.py" --robot "$ROBOT_ID" "$@"; }
 ```
 
 `amr`은 이 터미널에서만 쓰는 편의 함수입니다. 새 터미널을 열면 위 설정 블록을 다시 실행합니다. 이후 모든 명령은 선택한 로봇의 실행 디렉터리를 사용합니다.
@@ -512,16 +532,16 @@ amr() { python3 "$HOME/AMR/scripts/robot.py" --runtime "$AMR_RUNTIME" "$@"; }
 ### 2. 최초 구성·카메라 준비·빌드
 
 ```bash
-python3 scripts/materialize.py "$ROBOT_ID" --output "$AMR_RUNTIME"
-bash "$AMR_RUNTIME/$AMR_CAMERA/setup_camera.sh"
-bash scripts/build.sh "$AMR_RUNTIME"
+amr configure
+amr build
+amr camera-build
+# 기존 서비스가 다른 경로를 사용하면, 로봇 정지·서비스 종료 후 --replace를 붙입니다.
 amr install-services
 ```
 
-- M1·M2 모두 각 실행 디렉터리 안에 고정된 버전의 libcamera·camera_ros를 설치·빌드합니다. 카메라 설치 과정에서 sudo 비밀번호를 요청할 수 있습니다.
-- 2026-10-01 로봇 스냅샷 기준 M1도 M2와 같은 640×480 camera_ros 방식을 사용합니다. 대기 시 2fps, 도킹 시 M1 20fps/M2 15fps로 전환합니다.
-- 생성기는 기존 출력 디렉터리를 덮어쓰지 않습니다. 이미 구성했다면 재실행하지 않고 다음 단계로 진행합니다. 소스 갱신 후에는 새 출력 경로를 사용합니다.
-- 서비스 등록은 다른 내용의 기존 서비스를 덮어쓰지 않습니다. 기존 운용을 중지하고 유닛을 백업·검토한 뒤 전환해야 합니다. 등록만으로 서비스가 자동 시작되거나 로봇이 움직이지 않습니다.
+- `camera-build`는 AMR 내부에 libcamera 의존성과 현재 로봇의 `native_camera`를 빌드합니다. 첫 설치는 인터넷과 sudo 권한이 필요할 수 있습니다.
+- `.runtime`의 소스는 `common/`·`M1/`·`M2/` 파일을 연결합니다. 경로 이동·재구성 절차는 [단일 폴더 사용법](docs/single_folder.md)을 참고하세요.
+- 서비스 등록은 자동 시작하지 않습니다. 기존 서비스 교체는 정지 상태에서 `amr install-services --replace`로 명시하며 이전 유닛을 보관합니다.
 
 ### 3. 개별 시험 준비
 
@@ -550,7 +570,7 @@ amr status
 |---|---|
 | `amr mat` | 재료 창고 이동·도킹 |
 | `amr asm` | 조립대 이동·도킹 |
-| `amr rest` | 대기장소 이동·IR 정지 |
+| `amr rest` | 대기장소 이동·거리 직진 정지 |
 | `amr park` | 주차 위치 이동·주차 도킹 |
 | `amr status` | 모드·진행 단계·성공/실패·busy 확인 |
 | `amr stop` | 현재 작업 중단 요청 |

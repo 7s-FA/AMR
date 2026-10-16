@@ -19,7 +19,7 @@ def test_materialized_runtime_has_all_manifest_files_and_no_host_dependency(tmp_
     assert (ws/'host_ws/src/host_pkg/action/Burger.action').exists()
     assert (ws/'host_ws/src/waffle_navigation/maps/factory_map.pgm').exists()
     assert 'host_ws/setup_host.sh' not in (ws/'handoff/pc_env.bash').read_text()
-    assert str(camera) in (ws/'handoff/pc_env.bash').read_text()
+    assert str(camera) in (out/'runtime.env').read_text()
     assert 'DEPARTURE_SPEED' in (nav/'run_selected_waypoints.sh').read_text()
     for p in (out/'units').glob('*.service'):
         assert '%h/final_robot_ws' not in p.read_text()
@@ -30,17 +30,21 @@ def test_calibrated_robot_differences_are_preserved(robot,ids,park):
     cfg=yaml.safe_load((ROOT/robot/'config/routes.yaml').read_text());assert [m['id'] for m in yaml.safe_load((ROOT/robot/'config/parking_board.yaml').read_text())['markers']]==ids;assert cfg['routes']['park']==park
     camera=yaml.safe_load((ROOT/robot/'config/camera.yaml').read_text());assert camera
 
-def test_general_docking_uses_one_controller_and_equal_settings():
-    controls=[]
+def test_general_docking_uses_one_controller_and_valid_settings():
+    # 2026-10-16: 두 로봇은 같은 상태 기계(common/runtime/docking_control.py)를 쓰고, 설정값은 로봇별로 다르다
+    # (버거3 STM32 펄스 이동, 버거2 속도 방식 + 감속). 각 모드 설정이 검사를 통과하고 IR 키가 없어야 한다.
+    import sys
+    sys.path.insert(0, str(ROOT/'common/runtime'))
+    from docking_control import Settings
     for robot in ('M1','M2'):
         m=json.loads((ROOT/robot/'runtime_manifest.json').read_text())
         e=next(e for e in m['files'] if e['target']=='camera/docking_control.py')
         assert e['source']=='common/runtime/docking_control.py'
         cfg=yaml.safe_load((ROOT/robot/'config/docking.yaml').read_text())
-        assert cfg['control']['board_normal_tracking'] is True
-        assert cfg['parking_control']['board_normal_tracking'] is False
-        controls.append(cfg['control'])
-    assert controls[0]==controls[1]
+        assert not {'gpio_chip','gpio_pin'} & set(cfg)
+        for mode in (None,'parking_control','assembly_control'):
+            Settings(**{**cfg['control'], **(cfg.get(mode) or {})})
+        assert cfg['rest_control']['distance_m'] > 0
 
 def test_no_generated_or_backup_content_in_manifest():
     for robot in ['M1','M2']:

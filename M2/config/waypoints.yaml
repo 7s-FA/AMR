@@ -1,18 +1,22 @@
+# ========================================================================
+# 역할: 공통 작업 웨이포인트 좌표(지도 기준 x, y, 방향) 1~4 와 도착 조정값(arrival_tuning).
+#       실행 위치 이름: config/waypoints_<로봇>.yaml. 사용처: run_selected_waypoints.sh → station_routes.py, Nav2 launch.
+# ========================================================================
 # Burger2: 사용자 요청으로 Burger1의 공통 way1~4 좌표 이식.
 # 주차 시작 위치는 RViz에서 Burger2 실위치로 지정. 주차 마커 ID는 8~11.
 # 도착 전 조기 회전 방지용 시험 설정. 실측 정확도를 보장하지 않습니다.
 # Nav2 시작 launch와 웨이포인트 실행기가 이 파일의 arrival_tuning을 함께 읽습니다.
 arrival_tuning:
   # Nav2의 이동 도착 XY 허용 반경(m). 기존 0.05에서 시험값 0.02로 설정.
-  xy_goal_tolerance: 0.02
+  xy_goal_tolerance: 0.03
   # 중간 지점에서 제자리 회전을 완료한 뒤 다음 지점으로 전환할 허용 반경(m).
   # 회전 전 정지 판정과 마지막 지점은 위 xy_goal_tolerance(2cm)를 유지합니다.
   # 회전 뒤 AMCL 보정(실측 28~31mm) 때문에 재접근/재회전을 반복하지 않도록 4cm.
-  intermediate_xy_tolerance: 0.04
+  intermediate_xy_tolerance: 0.06
   # 최종 방향 허용 오차(rad). 0.25 rad는 약 14.3도입니다.
   yaw_goal_tolerance: 0.25
   # Spin 회전 최대 각속도(rad/s).
-  max_rotational_vel: 0.74844
+  max_rotational_vel: 0.43110144
   # Spin 회전 최소 각속도(rad/s).
   min_rotational_vel: 0.0792
   # Spin 각가속도(rad/s^2).
@@ -25,6 +29,6 @@ arrival_tuning:
 # yaw는 도착 시 로봇 앞면의 방향이며, 후진이라고 180도를 더하지 않는다.
 waypoints:
   - {x: 0.45062385, y: 0.036671807, yaw: 90.760873754, mode: forward}
-  - {x: 0.45062385, y: 0.360654172, yaw: 90.760873754, mode: forward}
+  - {x: 0.46813, y: 0.390648, yaw: 90.760873754, mode: forward}  # way2: 진행 방향(90.76°)으로 70 mm 당김, 원래 (0.46906513, 0.320654172) (2026-10-13)
   - {x: 0.45062385, y: -0.208328193, yaw: 0.0, mode: forward}  # way3: way4 방향으로 30 mm 이동 (2026-10-01)
   - {x: 0.45062385, y: -0.368328193, yaw: 270.0, mode: forward}  # way4: y -40 mm from previous value (2026-09-30)

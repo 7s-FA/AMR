@@ -1,3 +1,13 @@
+# ========================================================================
+# 역할: 주행 스크립트 공통 환경. 로봇 ROS 환경 + DDS 네트워크 설정을 한 번만 만들고 재사용한다 (source 용).
+# ========================================================================
+# [공통] 위 폴더로 올라가며 runtime.env 를 찾아 실행 경로 변수(AMR_WORKSPACE, AMR_CAMERA 등)를 불러온다.
+_amr_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
+  _amr_dir=$(dirname "$_amr_dir")
+done
+if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
+unset _amr_dir
 # Source once per command chain; a new SSH command still refreshes networking.
 _burger_env_here=$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 _burger_env_robot=$(basename "$(dirname "$_burger_env_here")")

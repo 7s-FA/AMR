@@ -1,3 +1,7 @@
+# ========================================================================
+# 역할: docking.yaml 에서 한 가지 목표(normal=조립대/창고 도킹, parking=주차)를 골라 설정 사전으로 만든다.
+# 사용처: docking_standby.py, docking_node.py.
+# ========================================================================
 """Select one docking target before starting vision or acquiring hardware."""
 from pathlib import Path
 
@@ -6,16 +10,19 @@ import yaml
 from .board import DockingBoard
 
 
+# 명령행에 --mode 등 목표 선택 인자 추가.
 def add_target_arguments(parser):
     target = parser.add_mutually_exclusive_group()
-    target.add_argument('--mode', choices=('normal', 'parking'),
-                        help='normal: shared docking board (default); parking: this robot\'s station')
+    target.add_argument('--mode', choices=('normal', 'parking', 'assembly'),
+                        help='normal: shared docking board (default); parking: this robot\'s station; '
+                             'assembly: normal board + assembly_control (조립대 전용 제어값, 2026-10-13)')
     target.add_argument('--board', help='Override board YAML path instead of selecting a mode')
     parser.add_argument('--calibration', help='Override calibration YAML path')
 
 
+# 설정 파일 읽기 → 선택한 모드의 보드·마커·제어값을 합쳐 반환.
 def load_docking_config(config_path, mode=None, board_path=None, calibration_path=None):
-    if mode not in (None, 'normal', 'parking'):
+    if mode not in (None, 'normal', 'parking', 'assembly'):
         raise ValueError(f'Unknown docking mode: {mode}')
     if mode is not None and board_path is not None:
         raise ValueError('Choose --mode or --board, not both')
@@ -34,10 +41,12 @@ def load_docking_config(config_path, mode=None, board_path=None, calibration_pat
     config['docking_mode'] = selected_mode
     # Apply parking-only tuning before the controller validates its Settings.
     # Normal and custom-board runs retain the shared control values.
-    if selected_mode == 'parking':
-        overrides = config.get('parking_control', {})
+    # 조립대(assembly)는 재료창고와 같은 보드를 쓰고 assembly_control 값만 덮어쓴다 (2026-10-13).
+    section = {'parking': 'parking_control', 'assembly': 'assembly_control'}.get(selected_mode)
+    if section:
+        overrides = config.get(section, {}) or {}
         if not isinstance(overrides, dict):
-            raise ValueError('parking_control must be a mapping')
+            raise ValueError(f'{section} must be a mapping')
         config['control'] = {**config['control'], **overrides}
     config['board_path'] = str(selected)
     config['board_spec'] = board.spec
