@@ -1,6 +1,6 @@
 # M1/M2 호스트 연동: 전원 투입 후 준비
 
-2026-10-02 버거1에서 확인한 절차입니다. `/home/ubuntu/final_robot_ws`에 배포된 로봇 런타임 기준이며, 새 경로에 materialize한 설치는 해당 경로를 사용합니다. M2는 같은 공통 Action 서버를 사용하지만 실제 적용·검증 여부는 배포 결과로 따로 확인합니다.
+2026-10-02 버거1에서 확인한 절차입니다. `/home/example_robot/final_robot_ws`에 배포된 로봇 런타임 기준이며, 새 경로에 materialize한 설치는 해당 경로를 사용합니다. M2는 같은 공통 Action 서버를 사용하지만 실제 적용·검증 여부는 배포 결과로 따로 확인합니다.
 
 호스트 공정 시작은 아래 준비가 끝난 뒤 수행합니다. 로봇은 자기 주차 시작 위치와 방향에 정지해 있어야 합니다. 중간 위치에서는 `parked`로 주차 좌표를 덮어쓰지 않습니다. 각 단계가 성공한 경우에만 다음 단계로 진행합니다.
 
@@ -14,7 +14,7 @@ case "$ROBOT_ID" in
   M1) RUNTIME_ROBOT=burger1; ACTION_UNIT=m1-action.service ;;
   M2) RUNTIME_ROBOT=burger2; ACTION_UNIT=m2-action.service ;;
 esac
-cd "/home/ubuntu/final_robot_ws/robot/$RUNTIME_ROBOT/navigation"
+cd "/home/example_robot/final_robot_ws/robot/$RUNTIME_ROBOT/navigation"
 source ./nav_env.bash
 ```
 

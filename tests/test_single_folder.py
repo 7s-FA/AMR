@@ -33,7 +33,7 @@ def test_runtime_is_complete_relocatable_and_uses_selected_profile(tmp_path,robo
     assert json.loads((nav/'mission_retry.json').read_text())['retries']==3
     for name in ['retry_ready.py','waypoint_worker.py','rest_ready_worker.py']:
         code = (nav/name).read_text()
-        assert '/home/ubuntu/' not in code
+        assert '/home/example_robot/' not in code
         assert other not in code
     for p in out.rglob('*'):
         assert not (p.is_symlink() and not p.exists()), p
@@ -52,8 +52,8 @@ print(json.dumps([op.robot,str(op.data)]))
     assert json.loads(result.stdout)==[cfg['runtime_robot'],str(Path(cfg['workspace'])/'data'/cfg['runtime_robot'])]
     for unit in (out/'units').glob('*.service'):
         text = unit.read_text()
-        assert '/home/ubuntu/final_robot_ws/' not in text
-        assert '/home/ubuntu/final_robot_camera' not in text
+        assert '/home/example_robot/final_robot_ws/' not in text
+        assert '/home/example_robot/final_robot_camera' not in text
         assert other not in text
         for line in text.splitlines():
             if line.startswith('ExecStart=/bin/bash '):

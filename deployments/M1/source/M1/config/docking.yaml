@@ -1,0 +1,95 @@
+# ========================================================================
+# 역할: 도킹·REST 설정 (토픽 이름, 마커 보드, 카메라 보정 경로, 정렬·엔코더 거리 정지 제어값, 네트워크 인터페이스, rest_control(거리 직진)).
+# 사용처: docking_standby/docking_node(docking_control), rest_forward, docking_network.py 등.
+# ========================================================================
+board_file: docking_board.yaml
+parking_board_file: parking_board.yaml
+parking_control:
+  encoder_stop_distance_m: 0.145  # 버거3
+  near_angular_taper: False  # 버거3
+  far_steering_gain: 1.0
+  near_angular_rps: 0.234
+  steering_accel_rps2: 1000.0
+  max_final_distance_m: 0.3
+  staging_distance_m: 0.22  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  lateral_tolerance_m: 0.003  # 2026-10-13 주차만 좌우 허용 2→3mm
+  yaw_tolerance_deg: 1.0  # 2026-10-13 주차만 각도 허용 0.7→1.0°
+# 조립대(asm) 전용 제어값 (2026-10-13): 재료창고와 같은 보드, 아래 값만 덮어씀. 나머지는 control 공통값.
+assembly_control:
+  lateral_tolerance_m: 0.005
+  yaw_tolerance_deg: 2.0
+  visual_entry_alignment: true
+  max_total_time_s: 55.0  # Includes stationary visual entry and longer aligned straight segment.
+  alignment_min_distance_m: 0.20  # Keep visual clearance until alignment is confirmed.
+  encoder_stop_distance_m: 0.005  # 버거3
+  near_angular_taper: False  # 버거3
+  staging_distance_m: 0.30  # Complete alignment with room before the 20 cm guard.
+network:
+  host_interface: enp3s0
+  robot_interface: wlan0
+vision:
+  preview_enabled: true  # 2026-10-13 도킹 영상 확인·녹화용 (PC camera_viewer.py burger1). 끝나면 false 로
+  transport: local_shared_memory
+  image_width: 640
+  image_height: 480
+  calibration_file: camera.yaml
+  http_port: 8085
+  preview_fps: 10.0
+  preview_jpeg_quality: 70
+camera_frame: burger1_camera_optical_frame
+cmd_topic: /burger1/cmd_vel_direct
+motor_state_topic: /burger1/sensor_state
+motor_power_service: /burger1/motor_power
+odom_topic: /burger1/odom
+base_frame: burger1/base_footprint
+max_image_age_s: 0.5
+control:
+  encoder_stop_distance_m: 0.008  # 버거3
+  encoder_stop_lead_m: 0.005  # 버거3
+  move_final_enabled: false  # M1: velocity + encoder stop; avoid STM32 position-mode torque cycling (2026-10-19)
+  move_speed_raw: 44  # 버거3
+  near_angular_min_scale: 0.4  # 버거3
+  near_angular_taper: True  # 버거3
+  camera_forward_m: 0.0
+  camera_left_m: 0.0  # 버거3 (이전 -0.0005)
+  camera_yaw_deg: -1.0  # 버거3 (이전 0.0)
+  staging_distance_m: 0.2  # 버거3 (이전 0.25)
+  lateral_tolerance_m: 0.002  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  yaw_tolerance_deg: 0.7  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  aligned_hold_s: 0.7
+  align_speed_mps: 0.045  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  final_speed_mps: 0.035  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  angular_speed_scale: 0.7  # 2026-10-13 버거1: 1.0 에서 정렬 전 좌우로 지나치며 흔들림 → 원래 값 0.7
+  angular_kd: 0.6  # 버거3 (이전 0.4)
+  angular_rate_filter_s: 0.1
+  max_angular_rps: 0.234
+  near_angular_rps: 0.12  # 2026-10-13 정렬 지점 방향 보정 강화 0.08→0.12
+  steering_accel_rps2: 0.8
+  far_steering_gain: 1.0  # 버거3 (이전 1.25)
+  min_angular_rps: 0.03  # 2026-10-13 0.07 시험 후 원래 값으로 (전진 중 작은 보정이 0 으로 버려지는 부작용)
+  observation_timeout_s: 0.5
+  vision_recovery_timeout_s: 2.0
+  vision_recovery_hold_s: 0.3
+  vision_recovery_fresh_s: 0.25
+  max_vision_recoveries: 3
+  odom_timeout_s: 0.3
+  odom_recovery_enabled: true
+  odom_recovery_timeout_s: 4.0  # 엔코더 공백이 2초를 넘겨 도킹 실패해 4초로 늘림 (2026-10-08)
+  odom_recovery_hold_s: 0.3
+  odom_recovery_fresh_s: 0.15
+  max_odom_recoveries: 3
+  max_final_distance_m: 0.45
+  max_final_time_s: 30.0
+  max_total_distance_m: 1.0
+  max_total_time_s: 45.0  # 버거3 (이전 90.0)
+  max_start_distance_m: 0.9
+  min_visual_distance_m: 0.12
+  stopped_hold_s: 0.5
+rest_control:
+  distance_m: 0.4  # 버거3
+  stop_lead_m: 0.005  # 버거3
+  speed_mps: 0.0351
+  max_time_s: 90.0
+  odom_timeout_s: 0.3
+  stopped_hold_s: 0.5
+  stop_timeout_s: 3.0

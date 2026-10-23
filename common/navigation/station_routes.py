@@ -18,6 +18,33 @@ def terminal_mode(stations, destination):
         raise ValueError('Missing or invalid terminal action: '+destination)
     return mode
 
+def curved_entry(point, settings):
+    """Guide a forward route onto the final heading before its unchanged endpoint.
+
+    These are Nav2 via points, not velocity commands. The controller still
+    checks obstacles and the route runner still verifies final XY and yaw.
+    """
+    if not isinstance(settings, dict) or set(settings) != {'radius_m', 'straight_m', 'entry_m', 'side'}:
+        raise ValueError('approach_curve requires radius_m, straight_m, entry_m and side')
+    radius, straight, entry = (settings[k] for k in ('radius_m', 'straight_m', 'entry_m'))
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+           or not .12 <= v <= .4 for v in (radius, straight, entry)):
+        raise ValueError('approach_curve lengths must be finite, within 0.12..0.4 m')
+    if settings['side'] not in ('left', 'right'):
+        raise ValueError('approach_curve side must be left or right')
+    sign = 1 if settings['side'] == 'left' else -1
+    yaw = math.radians(point['yaw']); c, s = math.cos(yaw), math.sin(yaw)
+    offsets = [(-straight-radius, sign*(radius+entry)),
+               (-straight-radius, sign*radius),
+               (-straight-radius/math.sqrt(2), sign*radius*(1-1/math.sqrt(2))),
+               (-straight, 0.)]
+    result = [dict(x=point['x']+along*c-left*s, y=point['y']+along*s+left*c,
+                   yaw=point['yaw'], mode='forward') for along, left in offsets]
+    for index, via in enumerate(result):
+        following = (result + [point])[index+1]
+        via['yaw'] = math.degrees(math.atan2(following['y']-via['y'], following['x']-via['x'])) % 360
+    return result
+
 # 목적지 → 웨이포인트 이름 목록 → 좌표·방향·주행모드가 들어간 경로 사전.
 def build_route(base, stations, selection):
     if selection in stations['routes']:
@@ -37,6 +64,8 @@ def build_route(base, stations, selection):
             point['yaw']=math.degrees(math.atan2(next_point['y']-point['y'],next_point['x']-point['x']))%360
         else:point['yaw']=float(variant['yaw_deg'])%360
         if not all(math.isfinite(float(point[k])) for k in ('x','y','yaw')):raise ValueError('좌표/방향이 유효하지 않습니다.')
+        if 'approach_curve' in variant:
+            result.extend(curved_entry(point, variant['approach_curve']))
         result.append(point)
     return {'arrival_tuning':copy.deepcopy(base.get('arrival_tuning',{})),'waypoints':result}
 

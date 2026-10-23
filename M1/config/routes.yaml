@@ -14,6 +14,13 @@ variants:
   way3_asm:
     waypoint: 3
     yaw_deg: 0
+    # Approach from the north, turn while moving, then finish toward +X.
+    # Final waypoint and final heading checks remain unchanged.
+    approach_curve:
+      radius_m: 0.18
+      straight_m: 0.12
+      entry_m: 0.18
+      side: left
   way1_park:
     waypoint: 1
     yaw_deg: 180

@@ -1,0 +1,105 @@
+# 버거2용: make_docking_override.py 가 M2/config/docking.yaml 에서 생성. 직접 고치지 말고 다시 생성.
+# ========================================================================
+# 역할: 도킹·REST 설정 (토픽 이름, 마커 보드, 카메라 보정 경로, 정렬·직진 제어값, IR 핀, 네트워크 인터페이스, rest_control).
+# 사용처: docking_standby/docking_node(docking_control), rest_forward, docking_network.py 등.
+# ========================================================================
+board_file: docking_board.yaml
+parking_board_file: parking_board.yaml
+parking_control:
+  encoder_stop_distance_m: 0.1484  # 버거2 추가
+  far_steering_gain: 1.0
+  near_angular_rps: 0.234
+  steering_accel_rps2: 1000.0
+  max_final_distance_m: 0.3
+  staging_distance_m: 0.22  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  lateral_tolerance_m: 0.003  # 2026-10-13 주차만 좌우 허용 2→3mm
+  yaw_tolerance_deg: 1.0  # 2026-10-13 주차만 각도 허용 0.7→1.0°
+# 조립대(asm) 전용 제어값 (2026-10-13): 재료창고와 같은 보드, 아래 값만 덮어씀. 나머지는 control 공통값.
+assembly_control:
+  lateral_tolerance_m: 0.005
+  yaw_tolerance_deg: 2.0
+  visual_entry_alignment: true
+  max_total_time_s: 55.0  # Includes stationary visual entry and longer aligned straight segment.
+  alignment_min_distance_m: 0.20  # Keep visual clearance until alignment is confirmed.
+  align_speed_mps: 0.025  # 버거2 추가
+  encoder_stop_distance_m: 0.0095  # 버거2 추가
+  far_steering_gain: 1.25  # 버거2 추가
+  final_speed_mps: 0.025  # 버거2 추가
+  max_angular_rps: 0.28  # 버거2 추가
+  near_angular_min_scale: 0.6  # 버거2 추가
+  near_angular_rps: 0.12  # 버거2 추가
+  near_angular_taper: False  # 버거2 추가
+  staging_distance_m: 0.30  # Complete alignment with room before the 20 cm guard.
+network:
+  host_interface: wlx705dccf1e506
+  robot_interface: wlan0
+vision:
+  preview_enabled: true  # 2026-10-12 도킹 영상 확인·녹화용 (PC camera_viewer.py). 끝나면 false 로
+  transport: local_shared_memory
+  calibration_file: camera.yaml
+  http_port: 8085
+  preview_fps: 10.0
+  preview_jpeg_quality: 70
+  image_width: 640
+  image_height: 480
+gpio_chip: /dev/gpiochip4
+gpio_pin: 17
+camera_frame: burger2_camera_optical_frame
+cmd_topic: /burger2/cmd_vel_direct
+motor_state_topic: /burger2/sensor_state
+motor_power_service: /burger2/motor_power
+odom_topic: /burger2/odom
+base_frame: burger2/base_footprint
+max_image_age_s: 0.5
+control:
+  encoder_ref_update: False  # 버거2 추가
+  encoder_slow_lead_m: 0.001  # 버거2 추가
+  encoder_slow_speed_mps: 0.01  # 버거2 추가
+  encoder_slow_zone_m: 0.02  # 버거2 추가
+  encoder_stop_distance_m: 0.0108  # 버거2 추가
+  encoder_stop_lead_m: 0.004  # 버거2 추가
+  ir_stop_enabled: False  # 버거2 추가
+  camera_forward_m: 0.0
+  camera_left_m: 0.0
+  camera_yaw_deg: 0.0
+  staging_distance_m: 0.22  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  lateral_tolerance_m: 0.002  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  yaw_tolerance_deg: 0.7  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  aligned_hold_s: 0.7
+  align_speed_mps: 0.045  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  final_speed_mps: 0.035  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  angular_speed_scale: 1.0  # 2026-10-13 시뮬레이션 추천값 (전체 도킹)
+  angular_kd: 0.6  # 버거2 (원본 M2: 0.4)
+  angular_rate_filter_s: 0.1
+  max_angular_rps: 0.234
+  near_angular_rps: 0.08 #0.12 -> 0.08 (2026-10-07)
+  steering_accel_rps2: 0.8
+  far_steering_gain: 1.0  # 버거2 (원본 M2: 1.25)
+  min_angular_rps: 0.03
+  observation_timeout_s: 0.5
+  vision_recovery_timeout_s: 2.0
+  vision_recovery_hold_s: 0.3
+  vision_recovery_fresh_s: 0.25
+  max_vision_recoveries: 3
+  odom_timeout_s: 0.3
+  odom_recovery_enabled: true
+  odom_recovery_timeout_s: 4.0  # 엔코더 공백이 2초를 넘겨 도킹 실패해 4초로 늘림 (2026-10-08)
+  odom_recovery_hold_s: 0.3
+  odom_recovery_fresh_s: 0.15
+  max_odom_recoveries: 3
+  ir_timeout_s: 0.1
+  max_final_distance_m: 0.45
+  max_final_time_s: 30.0
+  max_total_distance_m: 1.0
+  max_total_time_s: 45.0  # 버거2 (원본 M2: 90.0)
+  max_start_distance_m: 0.9
+  min_visual_distance_m: 0.12
+  stopped_hold_s: 0.5
+rest_control:
+  distance_m: 0.45  # 버거2 추가
+  stop_lead_m: 0.004  # 버거2 추가
+  speed_mps: 0.0351
+  max_time_s: 90.0
+  odom_timeout_s: 0.3
+  stopped_hold_s: 0.5
+  stop_timeout_s: 3.0

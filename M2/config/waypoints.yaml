@@ -30,5 +30,5 @@ arrival_tuning:
 waypoints:
   - {x: 0.45062385, y: 0.036671807, yaw: 90.760873754, mode: forward}
   - {x: 0.46906513, y: 0.320654172, yaw: 90.760873754, mode: forward}
-  - {x: 0.45062385, y: -0.208328193, yaw: 0.0, mode: forward}  # way3: way4 방향으로 30 mm 이동 (2026-10-01)
+  - {x: 0.45062385, y: -0.218328193, yaw: 0.0, mode: forward}  # way3: 조립대 마커 위치에 맞춰 -Y 10mm 추가 (2026-10-20)
   - {x: 0.45062385, y: -0.368328193, yaw: 270.0, mode: forward}  # way4: y -40 mm from previous value (2026-09-30)

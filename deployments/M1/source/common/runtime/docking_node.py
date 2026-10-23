@@ -1,0 +1,596 @@
+#!/usr/bin/env python3
+# ========================================================================
+# 역할: 도킹 ROS 노드. 카메라 관측·odom·모터 상태를 받아 docking_control 에 넣고, 결과 속도를 cmd_vel_direct 로 낸다.
+#       motion_owner 가 direct 모드일 때만 모터로 전달된다. (2026-10-16 IR 센서 제거: 직진 정지는 엔코더 거리로만)
+#       펄스 이동(control.move_final_enabled, 버거3 STM32): 직진은 /stm32/xl430_cmd "move L R 속도 번호" 로 보내고
+#       /stm32/move_status 결과를 상태 기계에 전달. 바닥에서 DONE 이 안 오면 토크 끄기/켜기로 위치 모드를 끝낸다.
+# 실행: 평소에는 docking_standby.py 가 미리 띄운 상태에서 요청마다 DockingNode 를 만든다 (빠른 시작).
+#       대기 작업자가 없으면 start_docking_engine.sh 가 python3 docking_node.py 로 직접 실행.
+# 결과: 마지막에 상태(DOCKED/FAULT…)와 이유, 엔코더 이동량을 보고 → terminal_wrapper/terminal_evidence 가 성공 여부 판정.
+# ========================================================================
+"""Robot-local docking controller: encoder-distance stop, optional STM32 pulse move."""
+import argparse
+import json
+import math
+from pathlib import Path
+import signal
+import time
+import queue
+from collections import deque
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+from communication_guard import GraphGuard
+from data_flow import CallbackMetrics, runtime_robot
+from rclpy.signals import SignalHandlerOptions
+from geometry_msgs.msg import TwistStamped
+from nav_msgs.msg import Odometry
+from std_msgs.msg import String
+from std_srvs.srv import Trigger, SetBool
+from turtlebot3_msgs.msg import SensorState
+
+from docking_vision.docking_config import add_target_arguments, load_docking_config
+from docking_control import DockingControl, Settings
+
+
+# 도킹 컨트롤러 노드 (/<로봇>/docking_controller).
+class DockingNode(Node):
+    # 설정 확인, 발행자(cmd_vel_direct·상태)·구독(odom·sensor_state)·서비스(start/stop)·10ms 제어 타이머 생성.
+    def __init__(self, config, execute=False, auto_start=False, vision_queue=None, recorder=None, graph_guard=None):
+        robot = runtime_robot(config)
+        super().__init__('docking_controller', namespace='/'+robot)
+        self.cfg, self.execute = config, execute
+        self.target_ids = sorted(marker['id'] for marker in config['board_spec']['markers'])
+        self.vision_queue = vision_queue
+        self.recorder = recorder
+        self.vision_health = None
+        self.image_age_s = self.detection_ms = None
+        self.control = DockingControl(Settings(**config['control']))
+        self.last_capture_ns = -1
+        self.auto_start = auto_start
+        self.auto_start_deadline = time.monotonic()+15.0
+        self.last_status = self.last_publish = float('-inf')
+        self.graph_error = 'graph_not_checked'
+        self.last_state = None
+        self.last_controller_report = {}
+        self.last_diagnostic_log = float('-inf')
+        self.last_vision_error = None
+        self.start_error = 'inputs_not_ready'
+        self.sequence = 0
+        self.motor_torque = self.motor_time = self.motor_request = None
+        self.encoder_message = None
+        self.encoder_received_at = None
+        self.docking_encoder_start = None
+        self.encoder_start_samples = []
+        self.encoder_samples = deque(maxlen=10)
+        self.encoder_attempt_started = None
+        self.motor_client = self.create_client(SetBool, config['motor_power_service']) if execute else None
+        latest_sensor_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
+        self.graph_guard = graph_guard
+        self.owns_graph_guard = graph_guard is None
+        self.last_graph_snapshot = {}
+        self.control_tick_ms = None
+        self.last_odom_stamp_ns = -1
+        self.callback_metrics = CallbackMetrics()
+        self.create_subscription(SensorState, config['motor_state_topic'], self.motor_state, latest_sensor_qos)
+        self.publisher = self.create_publisher(
+            TwistStamped, config['cmd_topic'] if execute else '/'+robot+'/docking/preview_cmd_vel', 1)
+        self.status_pub = self.create_publisher(String, '/'+robot+'/docking/status', 1)
+        # 펄스 이동(STM32 펌웨어 v6.7)일 때만: 명령 /stm32/xl430_cmd, 결과 /stm32/move_status(JSON, best effort)
+        self.move_cmd_pub = None
+        if self.control.cfg.move_final_enabled:
+            self.move_cmd_pub = self.create_publisher(String, '/stm32/xl430_cmd', 10)
+            self.create_subscription(String, '/stm32/move_status', self.move_status, qos_profile_sensor_data)
+        self.move_last_id = 0
+        self.move_cancelled = False
+        self.move_exit = None   # 도착 후 위치 모드 종료 진행: {'phase': 'off'|'on', 'at': 시각}
+        self.create_subscription(Odometry, config['odom_topic'], self.odometry, latest_sensor_qos)
+        self.create_service(Trigger, '/'+robot+'/docking/start', self.start)
+        self.create_service(Trigger, '/'+robot+'/docking/stop', self.stop)
+        if execute and self.graph_guard is None:
+            self.graph_guard = GraphGuard(config['cmd_topic'], self.get_name(), self.get_namespace(), 'docking')
+        self.create_timer(.01, self.tick)
+        self.get_logger().info('Mode: ' + ('EXECUTE' if execute else 'DRY RUN (preview topic only)'))
+        self.get_logger().info(
+            f"Docking target: {config.get('docking_mode', 'normal')}; IDs: {self.target_ids}")
+
+    # 메시지 시각이 limit 초 이내인지.
+    def stamp_fresh(self, stamp, limit):
+        ns = int(stamp.sec)*1_000_000_000 + int(stamp.nanosec)
+        age = (self.get_clock().now().nanoseconds-ns)/1e9
+        return ns > 0 and -.10 <= age <= limit
+
+    # 카메라 관측 처리 (콜백 시간 측정 포함).
+    def observation(self, msg):
+        mark = self.callback_metrics.begin()
+        try:
+            self._observation(msg)
+        finally:
+            self.callback_metrics.end('vision_observation', mark)
+
+    # 관측 JSON 검사: 최신인지, 내 보드·마커 ID 인지, 순서가 맞는지 → 제어기에 반영.
+    def _observation(self, msg):
+        now = time.monotonic()
+        try:
+            if len(msg.data) > 20000:
+                raise ValueError('oversized observation')
+            o = json.loads(msg.data)
+            if not isinstance(o, dict) or o.get('status') != 'ok':
+                raise ValueError('vision stopped or malformed: '+str(o.get('error', '') if isinstance(o, dict) else ''))
+            if o.get('mode') != 'four_marker_board' or o.get('board_spec') != self.cfg['board_spec']:
+                raise ValueError('wrong board configuration')
+            vision = self.cfg['vision']
+            expected_size = (vision.get('image_width', 640), vision.get('image_height', 480))
+            if o.get('frame_id') != self.cfg['camera_frame'] or (o.get('image_width'), o.get('image_height')) != expected_size:
+                raise ValueError('wrong camera frame or resolution')
+            stamp = o['source_stamp']
+            ns = int(stamp['sec'])*1_000_000_000+int(stamp['nanosec'])
+            age = (self.get_clock().now().nanoseconds-ns)/1e9
+            self.image_age_s, self.detection_ms = age, o.get('detection_ms')
+            # Source stamp came from THIS robot's camera, not the host clock.
+            if ns <= self.last_capture_ns or not -.1 <= age <= self.cfg['max_image_age_s']:
+                raise ValueError('stale/replayed camera frame')
+            if type(o.get('pose_valid')) is not bool:
+                raise ValueError('invalid pose flag')
+            # After alignment, only the camera/worker heartbeat is required.
+            # Near-field pose failures and changing normals must not stop the
+            # already committed straight segment or steer it again.
+            if o['pose_valid'] and self.control.state != 'FINAL_APPROACH':
+                if sorted(o.get('detected_ids', [])) != self.target_ids:
+                    raise ValueError('four unique markers required')
+                values = list(o['tvec_m']) + list(o['rvec_rad']) + [o['normal_yaw_rad'], o['reprojection_rms_px']]
+                if len(o['tvec_m']) != 3 or len(o['rvec_rad']) != 3 or not all(type(v) in (int, float) and math.isfinite(v) for v in values):
+                    raise ValueError('non-finite/invalid pose')
+                if o['reprojection_rms_px'] > self.cfg['max_reprojection_rms_px']:
+                    raise ValueError('reprojection error too high')
+                # Differential-drive geometry assumes an upright board and level camera.
+                rx, ry, rz = o['rvec_rad']
+                angle = math.sqrt(rx*rx+ry*ry+rz*rz)
+                if angle < 1e-8:
+                    raise ValueError('board normal faces away from camera')
+                ux, uy, uz = rx/angle, ry/angle, rz/angle
+                normal_y = uy*uz*(1-math.cos(angle))-ux*math.sin(angle)
+                normal_z = math.cos(angle)+uz*uz*(1-math.cos(angle))
+                if normal_z >= -.5 or abs(normal_y) > math.sin(math.radians(20)):
+                    raise ValueError('board must face camera and be upright within 20 degrees')
+            self.last_capture_ns = ns
+            self.control.set_observation(o, now-max(0., age))
+            self.last_vision_error = None
+            if self.recorder:
+                self.recorder.record('observation', {
+                    'source_stamp_ns': ns, 'image_age_s': age,
+                    'pose_valid': o['pose_valid'], 'reason': o.get('reason'),
+                    'detected_ids': o.get('detected_ids'), 'tvec_m': o.get('tvec_m'),
+                    'normal_yaw_rad': o.get('normal_yaw_rad'),
+                    'reprojection_rms_px': o.get('reprojection_rms_px'),
+                    'detection_ms': self.detection_ms})
+        except (ValueError, TypeError, KeyError, OverflowError) as exc:
+            self.last_vision_error = str(exc)
+            self.control.aligned_since = None
+            if self.control.state in self.control.ACTIVE and self.control.state != 'STOPPING':
+                self.control.halt('vision_invalid: '+str(exc))
+                self.publish_velocity(0., 0.)
+
+    # odom 처리 (콜백 시간 측정 포함).
+    def odometry(self, msg):
+        mark = self.callback_metrics.begin()
+        try:
+            self._odometry(msg)
+        finally:
+            self.callback_metrics.end('odom', mark)
+
+    # odom 을 (x, y, yaw, 속도)로 바꿔 제어기에 반영.
+    def _odometry(self, msg):
+        limit = (self.control.cfg.odom_recovery_fresh_s if self.control.state == 'ODOM_WAIT'
+                 else self.control.cfg.odom_timeout_s)
+        if not self.stamp_fresh(msg.header.stamp, limit):
+            return
+        stamp_ns = int(msg.header.stamp.sec)*1_000_000_000 + int(msg.header.stamp.nanosec)
+        if stamp_ns <= self.last_odom_stamp_ns:
+            return
+        self.last_odom_stamp_ns = stamp_ns
+        p, q, twist = msg.pose.pose.position, msg.pose.pose.orientation, msg.twist.twist
+        norm = sum(v*v for v in (q.x, q.y, q.z, q.w))
+        if not math.isfinite(norm) or abs(norm-1) > .05:
+            self.control.halt('invalid_odometry_quaternion')
+            return
+        yaw = math.atan2(2*(q.w*q.z+q.x*q.y), 1-2*(q.y*q.y+q.z*q.z))
+        self.control.set_odom(p.x, p.y, yaw, twist.linear.x, twist.angular.z, time.monotonic())
+
+    # 통신 감시 결과 (다른 속도 발행자가 있으면 오류).
+    def graph_check(self):
+        if self.graph_guard is None:
+            return None
+        self.last_graph_snapshot = self.graph_guard.snapshot()
+        return self.last_graph_snapshot['error']
+
+    # 직접 만든 통신 감시 프로세스가 있으면 함께 종료.
+    def destroy_node(self):
+        if self.graph_guard is not None and self.owns_graph_guard:
+            self.graph_guard.close()
+            self.graph_guard = None
+        return super().destroy_node()
+
+    # STM32 /stm32/move_status(JSON) 를 상태 기계에 전달.
+    def move_status(self, msg):
+        try:
+            data = json.loads(msg.data)
+            state = str(data.get('state'))
+            req = self.control.move_request
+            if req is not None and req.get('exit') and state == 'CANCELED':   # 우리가 낸 토크 끄기라 실패가 아님 → 노드가 직접 DONE 처리
+                if (self.move_exit is not None and self.control.move_state != 'DONE'
+                        and int(data.get('id', -1)) == req.get('id')):
+                    self.control.move_state = 'CANCELED_BY_EXIT'
+                return
+            self.control.set_move_status(int(data.get('id', -1)), state, str(data.get('reason')))
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+    # 상태 기계가 요청한 펄스 이동을 보내고, 도착 후 위치 모드 종료·ERROR 뒤 토크 켜기·실패 시 취소를 처리한다.
+    def handle_move(self):
+        req = self.control.move_request
+        if req is None or not self.execute or self.move_cmd_pub is None:
+            return
+        torque_ok = (self.encoder_message is not None and self.encoder_message.torque
+                     and self.encoder_received_at is not None and time.monotonic()-self.encoder_received_at <= 0.3)
+        if (not req['sent'] and self.control.state == 'FINAL_APPROACH'
+                and time.monotonic() >= req.get('not_before', 0.0) and (req.get('resumes', 0) == 0 or torque_ok)):
+            req['id'] = max(int(time.time()), self.move_last_id + 1)   # 펌웨어가 오래된 번호(STALE_ID)를 거부하므로 계속 커지게
+            self.move_last_id = req['id']
+            text = f"move {req['pulses']} {req['pulses']} {req['speed']} {req['id']}"
+            self.move_cmd_pub.publish(String(data=text))
+            req['sent'] = True
+            req['sent_at'] = time.monotonic()
+            self.move_cancelled = False
+            self.get_logger().info(f'펄스 이동 명령: {text} (약 {req["pulses"]*0.0506:.1f}mm)'
+                                   + (f' — feedback 오류 뒤 남은 거리 재전송 {req["resumes"]}회차' if req.get('resumes') else ''))
+        elif (req['sent'] and req.get('exit')
+              and (self.control.state == 'FINAL_APPROACH' or
+                   (self.control.state == 'ODOM_WAIT' and self.control.odom_resume_state == 'FINAL_APPROACH'))
+              and self.control.move_state not in ('DONE', 'ERROR')):
+            # 도착했는데 DONE 이 안 옴 → 토크 끄기(CANCELED 확인 또는 1초) → 토크 켜기(토크 확인) → DONE 으로 처리
+            now = time.monotonic()
+            if self.move_exit is None:
+                self.move_cmd_pub.publish(String(data='motor off'))
+                self.move_exit = {'phase': 'off', 'at': now}
+                self.get_logger().info('펄스 이동 도착(DONE 없음): 위치 모드 종료를 위해 토크 끄기')
+            elif self.move_exit['phase'] == 'off' and (self.control.move_state == 'CANCELED_BY_EXIT' or now-self.move_exit['at'] >= 1.0):
+                self.move_cmd_pub.publish(String(data='motor on'))
+                self.move_exit = {'phase': 'on', 'at': now}
+            elif (self.move_exit['phase'] == 'on' and now-self.move_exit['at'] >= 0.3 and self.encoder_message is not None
+                  and self.encoder_message.torque and now-self.encoder_received_at <= 0.3):
+                self.control.move_state, self.control.move_reason = 'DONE', 'reached_torque_cycled'
+                self.move_exit = None
+                self.get_logger().info('펄스 이동 완료로 처리: 토크 다시 켜짐, 속도 모드 복귀')
+        elif req['sent'] and not self.move_cancelled and self.control.move_state == 'ERROR':
+            # STM32 가 move ERROR 를 내면 토크를 끈 채로 둔다 → 다시 켜 둬야 재시도·다음 주행이 가능
+            self.move_cmd_pub.publish(String(data='motor on'))
+            self.move_cancelled = True
+            self.get_logger().warn(f'펄스 이동 ERROR({self.control.move_reason}): 토크 다시 켜기')
+        elif (req['sent'] and not self.move_cancelled and self.control.state in ('FAULT', 'STOPPED')
+              and self.control.move_state not in ('DONE', 'CANCELED', 'ERROR')):
+            self.move_cmd_pub.publish(String(data='motor off'))
+            time.sleep(0.8)   # CANCELED 처리 시간을 준 뒤 다시 켠다 (바로 켜면 다음 이동에서 ERROR feedback)
+            self.move_cmd_pub.publish(String(data='motor on'))
+            self.move_cancelled = True
+            self.get_logger().warn('도킹 정지: 진행 중인 펄스 이동을 토크 끄기/켜기로 취소')
+
+    # sensor_state 처리 (콜백 시간 측정 포함).
+    def motor_state(self, msg):
+        mark = self.callback_metrics.begin()
+        try:
+            self._motor_state(msg)
+        finally:
+            self.callback_metrics.end('sensor_state', mark)
+
+    # 모터 토크·엔코더 기록 (도킹 실패 시 후진 필요 판단용).
+    def _motor_state(self, msg):
+        now = time.monotonic()
+        self.encoder_message, self.encoder_received_at = msg, now
+        if self.encoder_attempt_started is not None:
+            counts = (msg.left_encoder, msg.right_encoder)
+            self.encoder_samples.append((now, counts))
+            if len(self.encoder_start_samples) < 10:
+                self.encoder_start_samples.append(counts)
+            self.docking_encoder_start = self.encoder_start_samples[0]
+        if self.stamp_fresh(msg.header.stamp, .5):
+            self.motor_torque, self.motor_time = bool(msg.torque), time.monotonic()
+
+    # 최근 5초 안에 엔코더 샘플이 충분하면 마지막 값.
+    def current_encoder(self):
+        now = time.monotonic()
+        if sum(now-at <= 5.0 for at, _ in self.encoder_samples) <= 3:
+            return None
+        return self.encoder_samples[-1][1]
+
+    # 도킹 중 엔코더 샘플이 부족하면 오류.
+    def encoder_error(self, now):
+        if (self.execute and self.encoder_attempt_started is not None
+                and now-self.encoder_attempt_started >= 5.0
+                and sum(now-at <= 5.0 for at, _ in self.encoder_samples) <= 3):
+            return 'encoder_samples_insufficient'
+        return None
+
+    # 시작·현재 엔코더 값 보고 (sequence_runner 가 후진 여부 판단).
+    def encoder_retry_report(self):
+        current = self.current_encoder()
+        return {'valid': self.docking_encoder_start is not None and current is not None,
+                'start': self.docking_encoder_start, 'current': current}
+
+    # 모터 상태가 오래됐거나 토크가 꺼졌으면 오류.
+    def motor_error(self, now):
+        if not self.execute:
+            return None
+        if not self.control.fresh(self.motor_time, now, .5):
+            return 'motor_state_timeout'
+        return None if self.motor_torque else 'motor_torque_off'
+
+    # 시작 전 검사, 토크가 꺼져 있으면 켜고 다시 확인.
+    def prepare_start(self, now):
+        error = self.control.start_error(now)
+        if error:
+            return False, error
+        error = self.motor_error(now)
+        if error == 'motor_torque_off':
+            # Only an explicit start may enable torque. Never re-enable during motion.
+            self.publish_velocity(0., 0.)
+            if self.motor_request is None:
+                if not self.motor_client.service_is_ready():
+                    return False, 'motor_power_service_unavailable'
+                self.motor_request = self.motor_client.call_async(SetBool.Request(data=True))
+            if self.motor_request.done():
+                try:
+                    result = self.motor_request.result()
+                    if not result.success:
+                        return False, 'motor_power_enable_failed: '+result.message
+                except Exception as exc:
+                    return False, 'motor_power_enable_failed: '+str(exc)
+            return False, 'motor_power_enabling'
+        if error:
+            return False, error
+        result = self.control.start(now)
+        if result[0]:
+            # Collect while docking; the first post-start pair is the baseline.
+            self.docking_encoder_start = None
+            self.encoder_start_samples.clear()
+            self.encoder_samples.clear()
+            self.encoder_attempt_started = now
+        return result
+
+    # start 서비스: 통신 확인 후 도킹 시작.
+    def start(self, _, response):
+        try:
+            error = self.graph_check()
+            if error:
+                response.success, response.message = False, error
+            else:
+                if self.control.state not in self.control.ACTIVE and not self.auto_start:
+                    self.motor_request = None
+                    self.docking_encoder_start = None
+                response.success, response.message = self.prepare_start(time.monotonic())
+                if response.success:
+                    self.auto_start = False
+                    self.publish_velocity(0., 0.)
+                elif response.message == 'motor_power_enabling':
+                    self.control.state, self.control.reason = 'IDLE', 'motor_power_enabling'
+                    self.auto_start = True
+                    self.auto_start_deadline = time.monotonic()+15.
+                    response.success = True  # Accepted; status reports completion/failure.
+        except Exception as exc:
+            self.control.halt('start_failed')
+            self.publish_velocity(0., 0.)
+            response.success, response.message = False, str(exc)
+        return response
+
+    # stop 서비스: 운영자 정지, 0 속도.
+    def stop(self, _, response):
+        self.control.halt('operator_stop', fault=False)
+        self.auto_start = False
+        self.publish_velocity(0., 0.)
+        response.success, response.message = True, 'Stopped; restart requires a new start service call.'
+        return response
+
+    # cmd_vel_direct 로 (v, w) 발행.
+    def publish_velocity(self, v, w):
+        msg = TwistStamped()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.cfg['base_frame']
+        msg.twist.linear.x, msg.twist.angular.z = float(v), float(w)
+        self.publisher.publish(msg)
+        if self.recorder:
+            self.recorder.record('command', {'linear_mps': float(v), 'angular_rps': float(w),
+                                            'execute': self.execute})
+
+    # 10ms 제어 주기 (콜백 시간 측정 포함).
+    def tick(self):
+        mark = self.callback_metrics.begin()
+        try:
+            self._tick()
+        finally:
+            self.callback_metrics.end('control_tick_including_inputs', mark)
+
+    # 카메라 관측 → 통신·엔코더·모터 검사 → 자동 시작 → 제어 계산 → 펄스 이동 처리 → 속도 발행 → 상태 방송·기록.
+    def _tick(self):
+        tick_started = time.monotonic()
+        now = tick_started
+        previous = self.control.state
+        if self.vision_queue is not None:
+            try:
+                observation = self.vision_queue.get_nowait()
+            except queue.Empty:
+                pass
+            else:
+                self.observation(String(data=json.dumps(observation, allow_nan=False)))
+        # Only a bounded shared-memory read; ROS graph calls run elsewhere.
+        self.graph_error = self.graph_check()
+        if self.graph_error and self.control.state in self.control.ACTIVE:
+            self.control.halt(self.graph_error)
+        now = time.monotonic()
+        encoder_error = self.encoder_error(now)
+        if encoder_error and self.control.state in self.control.ACTIVE:
+            self.control.halt(encoder_error)
+        motor_error = self.motor_error(now)
+        self.control.recovery_motor_ready = motor_error is None
+        odom_wait = (self.control.cfg.odom_recovery_enabled and
+                     (self.control.state == 'ODOM_WAIT' or
+                      not self.control.fresh(self.control.odom_time, now, self.control.cfg.odom_timeout_s)))
+        if self.move_exit is not None:   # 도착 후 위치 모드 종료 중의 짧은 토크 꺼짐은 오류로 보지 않음
+            motor_error = None
+        if motor_error and self.control.state in self.control.ACTIVE:
+            # Missing base feedback while waiting can only keep zero output.
+            # Explicit torque-off still faults; recovery requires fresh motor state.
+            if not (motor_error == 'motor_state_timeout' and odom_wait):
+                self.control.halt(motor_error)
+        if self.auto_start:
+            if self.control.state != 'IDLE':
+                self.auto_start = False
+            elif now >= self.auto_start_deadline:
+                self.control.halt('auto_start_timeout: '+(self.graph_error or self.start_error))
+                self.auto_start = False
+            elif not self.graph_error:
+                started, self.start_error = self.prepare_start(now)
+                if started:
+                    self.auto_start = False
+                else:
+                    self.control.reason = 'start_wait: '+self.start_error
+        v, w = self.control.tick(now)
+        self.handle_move()
+        if self.graph_error:
+            v = w = 0.
+        # 상태가 바뀌면 즉시, 평소엔 20Hz 로 속도 발행.
+        if now-self.last_publish >= .05 or previous != self.control.state:
+            self.publish_velocity(v, w)
+            self.last_publish = now
+        self.control_tick_ms = (time.monotonic()-tick_started)*1000
+        if now-self.last_status >= 1.0 or self.last_state != self.control.state:
+            self.sequence += 1
+            pose = self.control.pose()
+            report = {'state': self.control.state, 'reason': self.control.reason,
+                      'docking_encoder': self.encoder_retry_report() if self.control.state in ('FAULT','STOPPED','DOCKED') else None,
+                      'execute': self.execute,
+                      'docking_mode': self.cfg.get('docking_mode', 'normal'),
+                      'target_ids': self.target_ids,
+                      'linear_mps': v, 'angular_rps': w,
+                      'travel_m': self.control.distance, 'final_travel_m': self.control.final_distance,
+                      'move': (dict(self.control.move_request, state=self.control.move_state, reason=self.control.move_reason)
+                               if self.control.move_request else None),
+                      'graph_error': self.graph_error, 'graph_monitor': self.last_graph_snapshot,
+                      'remaining_m': self.control.encoder_remaining,
+                      'control_tick_ms': self.control_tick_ms, 'vision_error': self.last_vision_error,
+                      'vision_location': 'robot', 'image_age_s': self.image_age_s,
+                      'detection_ms': self.detection_ms,
+                      'motor_torque': self.motor_torque, 'motor_error': motor_error,
+                      'lateral_error_m': pose[1] if pose is not None else None,
+                      'yaw_error_deg': math.degrees(pose[2]) if pose is not None else None,
+                      'camera_distance_m': pose[3] if pose is not None else None,
+                      'optical_distance_m': pose[3] if pose is not None else None,
+                      'observation_reason': (self.control.observation or {}).get('reason'),
+                      'observation_age_now_s': (now-self.control.observation_time
+                                               if self.control.observation_time is not None else None),
+                      'odom_age_s': now-self.control.odom_time if self.control.odom_time is not None else None,
+                      'odom_recoveries': self.control.odom_recoveries,
+                      'odom_wait_elapsed_s': (now-self.control.odom_wait_at
+                          if self.control.state == 'ODOM_WAIT' else None),
+                      'odom_resume_state': self.control.odom_resume_state,
+                      'odom_linear_mps': self.control.odom[3] if self.control.odom else None,
+                      'odom_angular_rps': self.control.odom[4] if self.control.odom else None,
+                      'aligned_hold_elapsed_s': (now-self.control.aligned_since
+                                                 if self.control.aligned_since is not None else None),
+                      'vision_recoveries': self.control.vision_recoveries,
+                      'vision_wait_elapsed_s': (now-self.control.vision_wait_at
+                          if self.control.state == 'VISION_WAIT' else None),
+                      'vision_workers': self.vision_health() if self.vision_health else None,
+                      'log_dropped_records': self.recorder.dropped if self.recorder else 0,
+                      'log_writer_error': self.recorder.error if self.recorder else None,
+                      'sequence': self.sequence,
+                      'data_processing': self.callback_metrics.report()}
+            if self.recorder:
+                self.recorder.record('status', report)
+            self.last_controller_report = report
+            self.status_pub.publish(String(data=json.dumps(report, allow_nan=False)))
+            if self.last_state != self.control.state or now-self.last_diagnostic_log >= 5.0:
+                self.get_logger().info(json.dumps(report))
+                self.last_diagnostic_log = now
+            self.last_state, self.last_status = self.control.state, now
+
+
+# 단독 실행: 설정 읽기, 노드 생성, 결과가 나올 때까지 돌리고 종료 코드로 성공 여부 반환.
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--config', default=str(Path(__file__).with_name('docking.yaml')))
+    add_target_arguments(parser)
+    parser.add_argument('--execute', action='store_true', help='Publish to actual motor topic; default is preview only')
+    parser.add_argument('--auto-start', action='store_true', help='Start once inputs are ready within 15 seconds')
+    parser.add_argument('--exit-on-result', action='store_true', help='Exit after DOCKED, STOPPED or FAULT')
+    parser.add_argument('--log-dir', help='Robot-local diagnostic run directory')
+    args = parser.parse_args()
+    try:
+        config = load_docking_config(args.config, args.mode, args.board, args.calibration)
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        parser.error(str(exc))
+    Settings(**config['control'])  # 시작 전에 설정 검사
+    node = vision = recorder = None
+    exit_reason = 'unexpected_exit'
+    # 종료 신호를 KeyboardInterrupt 로 바꿔 정리 코드가 돌게 한다.
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt
+    for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, interrupted)
+    rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
+    try:
+        if args.log_dir:
+            from docking_recorder import DockingRecorder
+            recorder = DockingRecorder(args.log_dir, config, [
+                args.config, config['calibration_path'], config['board_path'],
+                __file__, Path(__file__).with_name('docking_control.py'),
+                Path(__file__).with_name('docking_vision_worker.py')])
+        if args.execute:
+            # Discover existing owners before creating any motor publisher.
+            probe = Node('docking_preflight', namespace='/'+runtime_robot(config))
+            try:
+                deadline = time.monotonic()+1.0
+                while time.monotonic() < deadline:
+                    rclpy.spin_once(probe, timeout_sec=.05)
+                if probe.count_publishers(config['cmd_topic']):
+                    raise RuntimeError('Motor topic already has a publisher; stop the previous driving process first.')
+            finally:
+                probe.destroy_node()
+        from docking_vision_worker import LocalVision
+        vision = LocalVision(config)
+        node = DockingNode(config, args.execute, args.auto_start, vision.channel, recorder)
+        node.vision_health = vision.health
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=.05)
+            if args.exit_on_result and node.control.state in ('DOCKED', 'STOPPED', 'FAULT'):
+                exit_reason = node.control.state + ': ' + node.control.reason
+                print(json.dumps(dict(node.last_controller_report,
+                    state=node.control.state, reason=node.control.reason,
+                    docking_encoder=node.encoder_retry_report())), flush=True)
+                return 0 if node.control.state == 'DOCKED' else 1
+        exit_reason = 'ros_shutdown'
+    except KeyboardInterrupt:
+        exit_reason = 'interrupted'
+        return 130
+    except Exception as exc:
+        exit_reason = f'{type(exc).__name__}: {exc}'
+        raise
+    finally:
+        if node is not None:
+            for _ in range(3):
+                node.publish_velocity(0., 0.)
+                time.sleep(.02)
+            node.destroy_node()
+        if vision is not None:
+            vision.close()
+        if rclpy.ok():
+            rclpy.shutdown()
+        if recorder is not None:
+            try:
+                recorder.close(exit_reason)
+            except Exception as exc:
+                print(f'Diagnostic finalization failed: {exc}', flush=True)
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

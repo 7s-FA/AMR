@@ -1,0 +1,17 @@
+<!-- Forward via-point route, with the unchanged position-only final checker.
+     Cull passed via points on every BT tick; replan at the existing 1 Hz.
+     No per-via-point goal completion, Spin, cancellation or automatic recovery.
+     Keep 0.06 m in sync with the documented passage radius. Final stays in goals. -->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PipelineSequence name="NavigateThroughWithReplanning">
+      <RemovePassedGoals input_goals="{goals}" output_goals="{goals}" radius="0.06"/>
+      <RateController hz="1.0">
+        <ComputePathThroughPoses goals="{goals}" path="{path}" planner_id="GridBased"
+                                 error_code_id="{compute_path_error_code}"/>
+      </RateController>
+      <FollowPath path="{path}" controller_id="FollowPositionForward"
+                  goal_checker_id="position_goal_checker" error_code_id="{follow_path_error_code}"/>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

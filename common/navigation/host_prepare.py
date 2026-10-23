@@ -9,6 +9,7 @@
 """Persistent host readiness worker; reconnect by request ID, never queue movement."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import socket
@@ -16,6 +17,49 @@ import subprocess
 import threading
 import time
 from startup_state import Feedback, Journal, lifecycle_evidence_valid, apply_lifecycle_reply
+
+
+class ImuHealth:
+    """Fresh, advancing STM32 diagnostics AND orientation; no latched READY."""
+    def __init__(self):
+        self.status_at = self.data_at = -math.inf
+        self.samples = None
+        self.stamp = -1
+        self.good_since = None
+
+    def status(self, text, now):
+        fields = dict(part.split('=', 1) for part in text.split() if '=' in part)
+        try:
+            samples = int(fields['samples'])
+            valid = (fields['cal'] == 'READY' and fields['attitude'] == '1' and
+                     fields['initialized'] == '1' and fields['hal'] == '0' and
+                     fields['result'] == 'OK' and 0 <= int(fields['age_ms']) <= 500 and
+                     (self.samples is None or samples > self.samples))
+        except (KeyError, ValueError):
+            valid = False
+            samples = None
+        self.samples = samples
+        if not valid:
+            self.good_since = None
+            self.status_at = -math.inf
+            return
+        if now - self.status_at > 2.5:
+            self.good_since = now
+        self.status_at = now
+
+    def data(self, stamp, age, orientation, covariance, now):
+        valid = (stamp > self.stamp and -.1 <= age <= .5 and covariance >= 0 and
+                 all(math.isfinite(x) for x in orientation) and
+                 abs(sum(x*x for x in orientation) - 1) <= .02)
+        if not valid:
+            self.data_at = -math.inf
+            return
+        self.stamp = stamp
+        self.data_at = now
+
+    def ready(self, now):
+        return (self.good_since is not None and now - self.good_since >= 1 and
+                now - self.status_at <= 2.5 and now - self.data_at <= .5)
 
 
 # 준비 작업자 유닉스 소켓 경로 ($XDG_RUNTIME_DIR/<로봇>-host-ready.sock).
@@ -91,7 +135,8 @@ def serve(robot):
     from lifecycle_msgs.msg import TransitionEvent
     from std_srvs.srv import SetBool
     from nav_msgs.msg import Odometry
-    from sensor_msgs.msg import LaserScan
+    from sensor_msgs.msg import LaserScan, Imu
+    from std_msgs.msg import String
     from turtlebot3_msgs.msg import SensorState
     from tf2_ros import Buffer,TransformListener
     from host_pkg.action import Burger
@@ -105,6 +150,7 @@ def serve(robot):
     executor=SingleThreadedExecutor();executor.add_node(node)
     buf=Buffer();listener=TransformListener(buf,node,spin_thread=False)
     feedback=Feedback();lock=threading.Lock();scan={};states={};clients={};pending={}
+    imu = ImuHealth()
     action=ActionClient(node,Burger,'/M'+robot[-1]+'/data')
     power=node.create_client(SetBool,'motor_power')
     # 메시지 시각의 나이(초).
@@ -122,6 +168,17 @@ def serve(robot):
     subs=[node.create_subscription(Odometry,'odom',odom,latest_sensor),
           node.create_subscription(SensorState,'sensor_state',sensor,latest_sensor),
           node.create_subscription(LaserScan,'scan',laser,latest_sensor)]
+    if robot == 'burger1':
+        def imu_status(msg):
+            with lock: imu.status(msg.data, time.monotonic())
+        def imu_data(msg):
+            q = msg.orientation
+            stamp = msg.header.stamp.sec*10**9 + msg.header.stamp.nanosec
+            with lock:
+                imu.data(stamp, age(msg.header.stamp), (q.w,q.x,q.y,q.z),
+                         msg.orientation_covariance[0], time.monotonic())
+        subs.extend((node.create_subscription(String,'/stm32/imu/status',imu_status,latest_sensor),
+                     node.create_subscription(Imu,'/stm32/imu/data',imu_data,latest_sensor)))
     for name in ('amcl','bt_navigator'):clients[name]=node.create_client(GetState,name+'/get_state')
     due={name:0. for name in clients}
     transitions={}
@@ -169,6 +226,7 @@ def serve(robot):
         with lock:
             checks={'fresh_stopped_odom':feedback.stopped(),'motor_torque':feedback.torque(),
                     'scan':bool(scan) and now-scan['at']<1 and -.1<=scan['age']<=1}
+            if robot == 'burger1': checks['fresh_imu'] = imu.ready(now)
             for name in ('amcl','bt_navigator') if navigation else ('amcl',):
                 state=states.get(name);inflight=pending.get(name)
                 checks[name]=lifecycle_evidence_valid(state,inflight[1] if inflight else None,now)
@@ -191,9 +249,14 @@ def serve(robot):
     def ensure_motor():
         deadline=time.monotonic()+45
         while True:
-            with lock:sample=feedback.sensor
-            if sample and time.monotonic()-sample[0]<=.5 and -.1<=sample[2]<=.5:break
-            if time.monotonic()>=deadline:raise RuntimeError('No fresh sensor_state; motor enable refused')
+            with lock:
+                sample=feedback.sensor
+                stationary=feedback.stopped()
+                imu_ready=robot != 'burger1' or imu.ready(time.monotonic())
+            if (stationary and imu_ready and sample and
+                    time.monotonic()-sample[0]<=.5 and -.1<=sample[2]<=.5):break
+            if time.monotonic()>=deadline:
+                raise RuntimeError('Motor enable refused: fresh stationary odom, sensor_state and healthy IMU required')
             time.sleep(.05)
         if sample[1]:return
         while not power.service_is_ready():

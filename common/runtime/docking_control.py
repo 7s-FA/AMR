@@ -26,6 +26,8 @@ class Settings:
     camera_forward_m: float = 0.0
     camera_left_m: float = 0.0
     camera_yaw_deg: float = 0.0
+    visual_entry_alignment: bool = False
+    alignment_min_distance_m: float = 0.0  # 0 disables the pre-alignment clearance guard.
     staging_distance_m: float = 0.25
     lateral_tolerance_m: float = 0.005
     yaw_tolerance_deg: float = 2.0
@@ -64,15 +66,15 @@ class Settings:
     def __post_init__(self):
         for f in fields(self):
             x = getattr(self, f.name)
-            if f.name == 'odom_recovery_enabled':
+            if f.name in ('odom_recovery_enabled', 'visual_entry_alignment'):
                 if type(x) is not bool:
                     raise ValueError(f'{f.name} must be Boolean')
                 continue
             if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
                 raise ValueError(f'{f.name} must be finite')
-            if f.name == 'angular_kd':
+            if f.name in ('angular_kd', 'alignment_min_distance_m'):
                 if x < 0:
-                    raise ValueError('angular_kd must be nonnegative')
+                    raise ValueError(f'{f.name} must be nonnegative')
             elif not f.name.startswith('camera_') and x <= 0:
                 raise ValueError(f'{f.name} must be positive')
         if type(self.max_vision_recoveries) is not int:
@@ -86,6 +88,9 @@ class Settings:
             raise ValueError('Invalid vision recovery timing')
         if not (0.01 <= self.final_speed_mps <= self.align_speed_mps <= .08):
             raise ValueError('Require 0.01 <= final speed <= align speed <= 0.08 m/s')
+        if self.alignment_min_distance_m and not (
+                self.min_visual_distance_m < self.alignment_min_distance_m <= self.staging_distance_m):
+            raise ValueError('Invalid pre-alignment clearance distance')
         if not (self.min_visual_distance_m < self.staging_distance_m < self.max_start_distance_m):
             raise ValueError('Invalid visual/staging/start distances')
         if not (self.min_angular_rps <= self.max_angular_rps <= .5):
@@ -243,6 +248,7 @@ class DockingControl:
         error = self.start_error(now)
         if error:
             return False, error
+        self.entry_heading_ready = False
         self.state, self.reason = 'ALIGN', 'visual_alignment'
         self.started_at, self.final_at = now, None
         self.distance = self.final_distance = 0.0
@@ -434,13 +440,41 @@ class DockingControl:
         if aligned:
             return c.align_speed_mps, 0.0
         # Forward-only polar pose controller to a point on the board normal.
+        # Preserve visible space before alignment is latched. Include the worst
+        # accepted camera age, command/braking latency and a small coast margin.
+        # Rotation can fix heading only when already on the board normal;
+        # a lateral offset needs another approach, never deeper forward creep.
+        if c.alignment_min_distance_m:
+            reserve = c.align_speed_mps * (c.observation_timeout_s + .2) + .005
+            if optical_z <= c.alignment_min_distance_m + reserve:
+                cross_track = by*math.cos(theta)-bx*math.sin(theta)
+                if abs(cross_track) > c.lateral_tolerance_m:
+                    self.halt('alignment_clearance_exhausted')
+                    return zero
+                self.reason = 'alignment_clearance_heading_only'
+                return 0.0, clamp(self.turn(1.2*theta, settling=True), c.near_angular_rps)
         gx, gy = bx-stage*math.cos(theta), by-stage*math.sin(theta)
+        # Use the visual goal bearing at the waypoint, not the map heading.
+        # Hysteresis avoids alternating move/rotate commands near the boundary.
+        if c.visual_entry_alignment:
+            entry_angle = math.atan2(gy, gx)
+            if abs(entry_angle) > math.radians(20):
+                self.entry_heading_ready = False
+            if not self.entry_heading_ready and gx > .02:
+                if abs(entry_angle) <= math.radians(6) and abs(self.odom[4]) <= .04:
+                    self.entry_heading_ready = True
+                else:
+                    self.reason = 'visual_entry_heading_alignment'
+                    return 0.0, clamp(self.turn(1.5*entry_angle, settling=True), c.max_angular_rps)
         rho = math.hypot(gx, gy)
         # Near the staging point the polar bearing becomes ill-conditioned:
         # a few mm of lateral residual can demand a 90/180 degree turn.
         # Cross-track distance to the board normal is invariant to an in-place turn.
         cross_track = by*math.cos(theta)-bx*math.sin(theta)
-        if rho < .02 and abs(cross_track) <= c.lateral_tolerance_m:
+        # After passing the staging point, rotation can still finish alignment
+        # when already on the board normal. Do not consume more visual clearance.
+        heading_only = rho < .02 or (gx <= .02 and abs(theta) < math.radians(45))
+        if heading_only and abs(cross_track) <= c.lateral_tolerance_m:
             self.reason = 'near_stage_heading_alignment'
             return 0.0, clamp(self.turn(1.2*theta, settling=True), c.near_angular_rps)
         # A forward-only robot cannot chase a staging point beside/behind it.
@@ -462,7 +496,15 @@ class DockingControl:
         limit = min(c.max_angular_rps, c.near_angular_rps + blend*(c.max_angular_rps-c.near_angular_rps))
         # Boost the well-conditioned far-field turn, taper near the staging pose.
         angular = clamp(self.turn((1.+(c.far_steering_gain-1.)*blend)*(1.8*alpha-.7*beta)),limit)
+        if c.visual_entry_alignment:
+            raw_turn = (1.+(c.far_steering_gain-1.)*blend)*(1.8*alpha-.7*beta)
+            angular = clamp(raw_turn-c.angular_kd*self.filtered_angular, limit)
         linear = min(c.align_speed_mps, .4*rho)
+        if c.visual_entry_alignment:
+            # Trade translation for steering time while bearing/pose is wrong.
+            severity = max(1., abs(alpha)/math.radians(10),
+                           abs(theta)/math.radians(4), abs(cross_track)/.008)
+            linear = min(linear, max(.01, c.align_speed_mps/min(severity, 4.)))
         heading_limit = 15 if self.reason == 'near_stage_forward_alignment' else 50
         if abs(alpha) > math.radians(heading_limit):
             linear = 0.0

@@ -187,3 +187,23 @@ def test_settings_reject_unsafe_numeric_values():
                    {'final_speed_mps': .2}, {'max_angular_rps': 1.}]:
         with pytest.raises(ValueError):
             Settings(**params)
+
+
+@pytest.mark.parametrize('by,degrees', [(.006733, 2.831), (.006344, 2.602), (.007496, 3.057)])
+def test_passed_staging_point_on_board_normal_turns_without_advancing(by, degrees):
+    c = DockingControl(Settings(staging_distance_m=.22, min_visual_distance_m=.12,
+                               lateral_tolerance_m=.002, yaw_tolerance_deg=.7))
+    inputs(c, 0., o=observation(x=-by, z=.1473, yaw=-math.radians(degrees)))
+    assert c.start(0.)[0]
+    v, w = c.tick(.01)
+    assert v == 0. and w > 0.
+    assert c.state == 'ALIGN' and c.reason == 'near_stage_heading_alignment'
+
+
+def test_passed_staging_point_off_board_normal_still_faults():
+    c = DockingControl(Settings(staging_distance_m=.22, min_visual_distance_m=.12,
+                               lateral_tolerance_m=.002, yaw_tolerance_deg=.7))
+    inputs(c, 0., o=observation(x=-.03, z=.147, yaw=-.05))
+    assert c.start(0.)[0]
+    assert c.tick(.01) == (0., 0.)
+    assert c.state == 'FAULT' and c.reason == 'insufficient_visual_alignment_space'

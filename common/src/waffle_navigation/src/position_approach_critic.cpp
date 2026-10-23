@@ -32,13 +32,17 @@ public:
     policy_.arrival_radius=number("arrival_radius",.03);
     policy_.slowing_distance=number("slowing_distance",.15);
     policy_.near_rotational_limit=number("near_rotational_limit",.21);
+    policy_.path_heading_weight=number("path_heading_weight",0.0);
+    policy_.path_lookahead=number("path_lookahead",.12);
     if (!std::isfinite(start) || !std::isfinite(stop) || start<=0 || stop<=start || stop>=90 ||
         !std::isfinite(policy_.cruise_speed) || policy_.cruise_speed<policy_.drive_floor ||
         !std::isfinite(policy_.approach_speed) || policy_.approach_speed<policy_.drive_floor ||
         policy_.approach_speed>policy_.cruise_speed ||
         !std::isfinite(policy_.arrival_radius) || policy_.arrival_radius<=0 ||
         !std::isfinite(policy_.slowing_distance) || policy_.slowing_distance<=policy_.arrival_radius ||
-        !std::isfinite(policy_.near_rotational_limit) || policy_.near_rotational_limit<.07)
+        !std::isfinite(policy_.near_rotational_limit) || policy_.near_rotational_limit<.07 ||
+        !std::isfinite(policy_.path_heading_weight) || policy_.path_heading_weight<0 ||
+        !std::isfinite(policy_.path_lookahead) || policy_.path_lookahead<=.02)
       throw std::runtime_error("Invalid PositionApproach heading/speed parameters");
     policy_.heading_start=start*3.141592653589793/180.0;
     policy_.heading_stop=stop*3.141592653589793/180.0;
@@ -47,8 +51,14 @@ public:
   void reset() override {}
   bool prepare(const geometry_msgs::msg::Pose2D & pose,
     const nav_2d_msgs::msg::Twist2D & velocity, const geometry_msgs::msg::Pose2D & goal,
-    const nav_2d_msgs::msg::Path2D &) override {
+    const nav_2d_msgs::msg::Path2D & path) override {
     policy_.prepare({pose.x,pose.y,pose.theta},{goal.x,goal.y,0},velocity.x,velocity.theta);
+    std::vector<Pose> points;
+    if(policy_.path_heading_weight>0) {
+      points.reserve(path.poses.size());
+      for(const auto & p:path.poses)points.push_back({p.x,p.y,p.theta});
+    }
+    policy_.prepare_path(points);
     return true;
   }
   double scoreTrajectory(const dwb_msgs::msg::Trajectory2D & traj) override {

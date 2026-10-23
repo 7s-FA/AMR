@@ -63,9 +63,9 @@ def materialize(robot, output, linked=False):
         install(source, dest, linked and kind != 'units' and not dest.name.startswith('dds_'))
         if kind == 'units':
             text = dest.read_text()
-            for old in ('/home/ubuntu/final_robot_ws', '%h/final_robot_ws', '$HOME/final_robot_ws'):
+            for old in ('/home/example_robot/final_robot_ws', '%h/final_robot_ws', '$HOME/final_robot_ws'):
                 text = text.replace(old, str(workspace))
-            for old in ('/home/ubuntu/'+manifest['camera_directory'], '%h/'+manifest['camera_directory']):
+            for old in ('/home/example_robot/'+manifest['camera_directory'], '%h/'+manifest['camera_directory']):
                 text = text.replace(old, str(camera))
             dest.write_text(text)
     for source_root in (ROOT/'common/src/amr_mission', ROOT/'interfaces/host_pkg'):

@@ -1,0 +1,14 @@
+[Unit]
+Description=M1 measured battery voltage relay (read-only)
+After=burger1-base.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash %h/AMR/battery_telemetry/start_m1_battery_bridge.bash
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=default.target

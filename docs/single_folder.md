@@ -26,7 +26,7 @@ AMR/
 
 주행·도킹 소스와 설정은 저장소 파일에 연결됩니다. `.runtime` 아래 소스 링크를 편집해도 실제 Git 소스가 변경됩니다.
 빌드·로그·상태·DDS 생성 파일은 `.runtime`에만 저장됩니다. 서비스 등록 파일만 `~/.config/systemd/user`에 설치되며,
-실행 경로는 AMR 내부를 가리킵니다. `/home/ubuntu/final_robot_ws`나 별도의 카메라 프로젝트는 필요하지 않습니다.
+실행 경로는 AMR 내부를 가리킵니다. `/home/example_robot/final_robot_ws`나 별도의 카메라 프로젝트는 필요하지 않습니다.
 
 ## 최초 설치
 

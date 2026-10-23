@@ -1,0 +1,125 @@
+# 버거3(STM32F411) 카메라 보정값 (2026-10-14, 체커보드 6x9·25mm 30장, rms 0.145px). M1/config/camera.yaml 대신 실행 폴더에 링크.
+image_width: 640
+image_height: 480
+camera_name: burger3_camera
+camera_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 505.83732636809697
+  - 0.0
+  - 327.3522913910015
+  - 0.0
+  - 506.3521481062509
+  - 243.72092118273804
+  - 0.0
+  - 0.0
+  - 1.0
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data:
+  - 0.14875162932192845
+  - -0.0020367463121442266
+  - -0.0007059037821279794
+  - 0.002340744433326295
+  - -0.9239818837702914
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+projection_matrix:
+  rows: 3
+  cols: 4
+  data:
+  - 505.83732636809697
+  - 0.0
+  - 327.3522913910015
+  - 0.0
+  - 0.0
+  - 506.3521481062509
+  - 243.72092118273804
+  - 0.0
+  - 0.0
+  - 0.0
+  - 1.0
+  - 0.0
+rms_px: 0.14504022563102412
+per_view_rms_px:
+- 0.250716894865036
+- 0.2502787709236145
+- 0.23305577039718628
+- 0.23159992694854736
+- 0.20608049631118774
+- 0.0980958417057991
+- 0.1139993816614151
+- 0.15323032438755035
+- 0.14520138502120972
+- 0.15437747538089752
+- 0.21321214735507965
+- 0.20086516439914703
+- 0.08550509810447693
+- 0.08025778830051422
+- 0.1085946187376976
+- 0.1128520518541336
+- 0.12729205191135406
+- 0.06860797852277756
+- 0.06317072361707687
+- 0.0866357833147049
+- 0.1117250993847847
+- 0.0932951271533966
+- 0.1216651126742363
+- 0.11838002502918243
+- 0.07688496261835098
+- 0.06807252764701843
+- 0.08787201344966888
+- 0.13124242424964905
+- 0.125576913356781
+- 0.08006198704242706
+corner_refinement: spacing_limited_subpix_v1
+board:
+  cols: 6
+  rows: 9
+  square_m: 0.025
+accepted_images:
+- /home/example_robot/calib_burger3/checkerboard_1791942090178990164.png
+- /home/example_robot/calib_burger3/checkerboard_1791942092829716002.png
+- /home/example_robot/calib_burger3/checkerboard_1791942095827681628.png
+- /home/example_robot/calib_burger3/checkerboard_1791942098161846526.png
+- /home/example_robot/calib_burger3/checkerboard_1791942101025959679.png
+- /home/example_robot/calib_burger3/checkerboard_1791942102959771093.png
+- /home/example_robot/calib_burger3/checkerboard_1791942104607246734.png
+- /home/example_robot/calib_burger3/checkerboard_1791942106957534095.png
+- /home/example_robot/calib_burger3/checkerboard_1791942109358011717.png
+- /home/example_robot/calib_burger3/checkerboard_1791942111506868042.png
+- /home/example_robot/calib_burger3/checkerboard_1791942114912062644.png
+- /home/example_robot/calib_burger3/checkerboard_1791942117822425760.png
+- /home/example_robot/calib_burger3/checkerboard_1791942119889150026.png
+- /home/example_robot/calib_burger3/checkerboard_1791942123842004794.png
+- /home/example_robot/calib_burger3/checkerboard_1791942125953359298.png
+- /home/example_robot/calib_burger3/checkerboard_1791942128686783320.png
+- /home/example_robot/calib_burger3/checkerboard_1791942131220954823.png
+- /home/example_robot/calib_burger3/checkerboard_1791942134685876486.png
+- /home/example_robot/calib_burger3/checkerboard_1791942137976466735.png
+- /home/example_robot/calib_burger3/checkerboard_1791942139818995323.png
+- /home/example_robot/calib_burger3/checkerboard_1791942141816328227.png
+- /home/example_robot/calib_burger3/checkerboard_1791942144282518430.png
+- /home/example_robot/calib_burger3/checkerboard_1791942147285952172.png
+- /home/example_robot/calib_burger3/checkerboard_1791942151149419392.png
+- /home/example_robot/calib_burger3/checkerboard_1791942153217441499.png
+- /home/example_robot/calib_burger3/checkerboard_1791942155366404064.png
+- /home/example_robot/calib_burger3/checkerboard_1791942158217170618.png
+- /home/example_robot/calib_burger3/checkerboard_1791942160300679934.png
+- /home/example_robot/calib_burger3/checkerboard_1791942163481706302.png
+- /home/example_robot/calib_burger3/checkerboard_1791942165298504256.png
+rejected_images: []

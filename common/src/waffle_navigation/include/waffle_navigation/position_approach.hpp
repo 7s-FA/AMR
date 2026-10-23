@@ -4,6 +4,7 @@
 #pragma once
 #include <cmath>
 #include <algorithm>
+#include <vector>
 #include "waffle_navigation/precision_pose.hpp"
 
 namespace waffle_navigation {
@@ -20,6 +21,9 @@ public:
   double heading_stop{12.0*3.141592653589793/180.0};
   double cruise_speed{.0684288}, approach_speed{.03}, arrival_radius{.03}, slowing_distance{.15};
   double near_rotational_limit{.21};
+  double path_heading_weight{0}, path_lookahead{.12};
+  Pose path_target{};
+  bool have_path_target{false};
   double measured_v{0}, measured_w{0};
   bool have_goal{false};
   void prepare(Pose pose, Pose target, double velocity=0, double rotation=0) {
@@ -49,6 +53,35 @@ public:
   double bearing(Pose pose) const {
     return angle(std::atan2(goal.y-pose.y,goal.x-pose.x)-pose.yaw);
   }
+  // Interpolate by arc length, so sparse planner points do not create a
+  // heading dead zone at a corner. This only adds a continuous soft cost.
+  void prepare_path(const std::vector<Pose> & path) {
+    have_path_target=false;
+    if(path_heading_weight<=0 || path.size()<2) return;
+    double nearest=1e100, fraction=0; size_t segment=0;
+    for(size_t i=1;i<path.size();++i) {
+      const auto a=path[i-1], b=path[i];
+      if(!std::isfinite(a.x)||!std::isfinite(a.y)||!std::isfinite(b.x)||!std::isfinite(b.y))return;
+      const double dx=b.x-a.x,dy=b.y-a.y, length2=dx*dx+dy*dy;
+      if(length2<1e-12)continue;
+      const double t=std::clamp(((current.x-a.x)*dx+(current.y-a.y)*dy)/length2,0.,1.);
+      const double d=std::hypot(current.x-a.x-t*dx,current.y-a.y-t*dy);
+      if(d<nearest){nearest=d;segment=i;fraction=t;}
+    }
+    if(!segment)return;
+    double remaining=path_lookahead;
+    for(size_t i=segment;i<path.size();++i) {
+      const auto a=path[i-1],b=path[i];const double start=i==segment?fraction:0.;
+      const double length=distance(a,b), available=length*(1-start);
+      if(length>1e-9 && remaining<=available) {
+        const double t=start+remaining/length;
+        path_target={a.x+t*(b.x-a.x),a.y+t*(b.y-a.y),0};
+        have_path_target=true;return;
+      }
+      remaining-=available;
+    }
+    path_target=path.back();have_path_target=true;
+  }
   bool allowed(double v, double w) const {
     if (!std::isfinite(v) || !std::isfinite(w) || v < -1e-9) return false;
     // Keep zero translation for steering, but reject the observed wheel-stall
@@ -76,8 +109,13 @@ public:
       distance(predicted,goal)<=distance(current,goal)+.002;
   }
   double score(Pose end) const {
-    if (distance(current,goal)>radius)
-      return heading_hold ? .035*std::abs(bearing(end)) : 0;
+    if (distance(current,goal)>radius) {
+      if(heading_hold)return .035*std::abs(bearing(end));
+      if(have_path_target && distance(end,path_target)>.02)
+        return path_heading_weight*std::abs(angle(
+          std::atan2(path_target.y-end.y,path_target.x-end.x)-end.yaw));
+      return 0;
+    }
     // A continuous XY cost avoids cell plateaus. The target is the coordinate,
     // not its final parking orientation. Suppress bearing singularity inside
     // the unchanged 2cm arrival tolerance.

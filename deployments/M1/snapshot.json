@@ -1,0 +1,274 @@
+{
+  "robot": "M1",
+  "captured": "2026-10-22",
+  "comparison_base": "6e7b69dedbac73ec59b1b8c08388aa54324c4922",
+  "base_prefix": "",
+  "changes": [
+    {
+      "path": "M1/config/camera.yaml",
+      "kind": "different"
+    },
+    {
+      "path": "M1/config/docking.yaml",
+      "kind": "different"
+    },
+    {
+      "path": "M1/config/docking_board.yaml",
+      "kind": "different"
+    },
+    {
+      "path": "M1/config/nav2.yaml",
+      "kind": "different"
+    },
+    {
+      "path": "M1/config/waypoints.yaml",
+      "kind": "different"
+    },
+    {
+      "path": "M1/runtime_manifest.json",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/navigation/ensure_docking_ready.sh",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/navigation/manage.sh",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/navigation/rest_ready_worker.py",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/navigation/retry_ready.py",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/navigation/run_rest.sh",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/navigation/run_selected_waypoints.sh",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/navigation/warm.sh",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/runtime/base.launch.py",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/runtime/camera_profile.sh",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/runtime/check_base.sh",
+      "kind": "extra"
+    },
+    {
+      "path": "M1/src/runtime/cmd_throttle.py",
+      "kind": "extra"
+    },
+    {
+      "path": "M1/src/runtime/start_base.sh",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/runtime/start_docking_engine.sh",
+      "kind": "different"
+    },
+    {
+      "path": "M1/src/runtime/stm32_compat.py",
+      "kind": "extra"
+    },
+    {
+      "path": "M1/src/runtime/wheel_odom.py",
+      "kind": "extra"
+    },
+    {
+      "path": "battery_telemetry/m1-battery.service",
+      "kind": "extra"
+    },
+    {
+      "path": "battery_telemetry/m1_battery_bridge.py",
+      "kind": "extra"
+    },
+    {
+      "path": "battery_telemetry/start_m1_battery_bridge.bash",
+      "kind": "extra"
+    },
+    {
+      "path": "battery_telemetry/wait_m1_battery_network.py",
+      "kind": "extra"
+    },
+    {
+      "path": "common/docking_vision/board.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/docking_vision/capture_checkerboard.py",
+      "kind": "extra"
+    },
+    {
+      "path": "common/docking_vision/docking_config.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/docking_vision/vision.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/navigation/boot_prepare.sh",
+      "kind": "extra"
+    },
+    {
+      "path": "common/navigation/communication_guard.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/navigation/data_flow.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/navigation/ensure_camera.sh",
+      "kind": "different"
+    },
+    {
+      "path": "common/navigation/host_prepare.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/navigation/rest.sh",
+      "kind": "different"
+    },
+    {
+      "path": "common/navigation/rest_forward.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/navigation/sequence_runner.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/navigation/terminal_evidence.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/runtime/dock_log.py",
+      "kind": "extra"
+    },
+    {
+      "path": "common/runtime/docking_control.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/runtime/docking_node.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/runtime/docking_standby.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/runtime/docking_vision_worker.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/runtime/docking_warm_client.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/runtime/test_docking_control.py",
+      "kind": "extra"
+    },
+    {
+      "path": "common/src/amr_mission/amr_mission/action_server.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/src/amr_mission/amr_mission/backend.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/src/waffle_navigation/behavior_trees/navigate_through_forward.xml",
+      "kind": "extra"
+    },
+    {
+      "path": "common/src/waffle_navigation/include/waffle_navigation/position_approach.hpp",
+      "kind": "different"
+    },
+    {
+      "path": "common/src/waffle_navigation/launch/burger1_navigation.launch.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/src/waffle_navigation/launch/burger2_navigation.launch.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/src/waffle_navigation/scripts/nav2_waypoints.py",
+      "kind": "different"
+    },
+    {
+      "path": "common/src/waffle_navigation/src/position_approach_critic.cpp",
+      "kind": "different"
+    },
+    {
+      "path": "scripts/doctor.py",
+      "kind": "different"
+    },
+    {
+      "path": "scripts/materialize.py",
+      "kind": "different"
+    },
+    {
+      "path": "scripts/relink_runtime.py",
+      "kind": "extra"
+    },
+    {
+      "path": "systemd/M1/burger1-boot-prepare.service",
+      "kind": "extra"
+    },
+    {
+      "path": "systemd/M2/burger2-boot-prepare.service",
+      "kind": "extra"
+    },
+    {
+      "path": "tests/test_action_contract.py",
+      "kind": "different"
+    },
+    {
+      "path": "tests/test_action_ros.py",
+      "kind": "different"
+    },
+    {
+      "path": "tests/test_backend.py",
+      "kind": "different"
+    },
+    {
+      "path": "tests/test_packaging.py",
+      "kind": "different"
+    },
+    {
+      "path": "tests/test_rest_and_routes.py",
+      "kind": "different"
+    }
+  ],
+  "runtime_overrides": [],
+  "absent_in_deployment": [
+    "M1/src/runtime/ir_sensor.py",
+    "M1/src/runtime/test_docking_control.py",
+    "M1/src/runtime/test_docking_node.py",
+    "M1/src/runtime/test_ported_alignment.py",
+    "M2/src/runtime/ir_sensor.py",
+    "M2/src/runtime/test_docking_control.py",
+    "M2/src/runtime/test_docking_node.py",
+    "M3/README.md",
+    "common/runtime/test_docking_recovery.py",
+    "tests/test_synced_docking.py"
+  ],
+  "notes": "Text source differences only. Missing deployment files are inventory, not deletion requests. External linear files are stored separately."
+}

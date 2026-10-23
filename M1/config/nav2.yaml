@@ -227,6 +227,10 @@ controller_server:
       waffle_navigation::PositionApproach.scale: 1000.0
       waffle_navigation::PositionApproach.heading_guard_enabled: false
       waffle_navigation::PositionApproach.continuous_steering_enabled: true
+      # Continuous heading cost toward a point 16 cm along the route avoids
+      # grid-score plateaus at corners; final arrival uses the existing policy.
+      waffle_navigation::PositionApproach.path_heading_weight: 0.003
+      waffle_navigation::PositionApproach.path_lookahead: 0.16
       waffle_navigation::PositionApproach.heading_start_deg: 5.0
       waffle_navigation::PositionApproach.heading_stop_deg: 12.0
       waffle_navigation::PositionApproach.smooth_speed_enabled: true
@@ -242,6 +246,9 @@ controller_server:
       PathAlign.forward_point_distance: 0.08
       PathDist.scale: 24.0
       GoalDist.scale: 32.0
+      # Moving arcs above 2 cm/s are not stationary angular oscillation.
+      # Below the 2.5 cm/s drive floor, retain stationary turn protection.
+      Oscillation.x_only_threshold: 0.02
       Twirling.scale: 0.2
 local_costmap:
   local_costmap:

@@ -1005,7 +1005,7 @@ def report_failure(nav, index):
 
 # 목표 1개 진행 감시: 시간 제한, 지나침·경로 이탈 감시, 근처 도달 시 다음 단계로 넘기기.
 def wait_for_task(nav, deadline, index, waypoint=None, terminal_handoff=False,
-                  intermediate_handoff=False, planned_route=False):
+                  intermediate_handoff=False, planned_route=False, passage=None):
     nav.navigation_retry_reason = None
     guard = ApproachOvershootGuard() if waypoint is not None else None
     start_pose = None
@@ -1024,8 +1024,11 @@ def wait_for_task(nav, deadline, index, waypoint=None, terminal_handoff=False,
             try:
                 pose = nav.current_map_pose(timeout=0.15)
                 distance = math.hypot(pose[0] - waypoint['x'], pose[1] - waypoint['y'])
-                overshot = guard.update(distance, time.monotonic())
-            except (RuntimeError, ValueError) as exc:
+                # A through-route may pass near the endpoint before its via points.
+                # Arm endpoint overshoot protection only after Nav2 passed them all.
+                final_leg = passage is None or passage.update(nav.getFeedback())
+                overshot = final_leg and guard.update(distance, time.monotonic())
+            except (RuntimeError, ValueError, OSError) as exc:
                 nav.error(f'Waypoint {index}: 목표 접근 감시 위치 확인 실패: {exc}')
                 nav.cancel_guarded_translation()
                 return False
@@ -1076,6 +1079,98 @@ def wait_for_task(nav, deadline, index, waypoint=None, terminal_handoff=False,
         report_failure(nav, index)
         return False
     return True
+
+
+class ThroughPassage:
+    """Checkpoint only via points removed by this action's RemovePassedGoals BT.
+
+    Jazzy feedback retains the final goal in number_of_poses_remaining. It must
+    never mark final arrival: that still requires stopped XY and yaw checks.
+    """
+    def __init__(self, count, completed=0, progress=None):
+        self.count, self.start = count, completed
+        self.completed, self.progress = completed, progress
+
+    def update(self, feedback):
+        if feedback is not None:
+            remaining = getattr(feedback, 'number_of_poses_remaining', None)
+            if (type(remaining) is not int or
+                    not 1 <= remaining <= self.count - self.start):
+                raise RuntimeError('연속 경로의 중간점 통과 피드백이 유효하지 않습니다.')
+            passed = self.count - remaining
+            if passed < self.completed:
+                raise RuntimeError('연속 경로의 통과 순서가 뒤로 바뀌었습니다.')
+            while self.completed < passed:
+                if self.progress:
+                    self.progress.complete(self.completed + 1)
+                self.completed += 1
+        return self.completed == self.count - 1
+
+
+def run_through_waypoints(nav, waypoints, poses, deadline, tree):
+    """One Nav2 action per route attempt; no stop/cancel/spin at via points."""
+    progress = getattr(nav, 'route_progress', None)
+    completed = progress.state['completed'] if progress else 0
+    if completed == len(waypoints):
+        return 0
+    recovery_retries = getattr(nav, 'navigation_retries', 0)
+    retries = max(getattr(nav, 'position_arrival_retries', 0), recovery_retries)
+    for attempt in range(retries + 1):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not nav.wait_until_stopped(timeout=min(5., remaining)):
+            return 1
+        target = waypoints[completed]
+        if getattr(nav, 'align_before_navigation', False) or attempt:
+            if not nav.align_for_travel(target, deadline, completed + 1):
+                return 1
+        elif getattr(nav, 'align_large_heading_before_navigation', False):
+            distance, heading = travel_heading_error(target, nav.current_map_pose(timeout=2.))
+            if (distance > nav.xy_tolerance and
+                    abs(heading) > math.radians(getattr(nav, 'prealign_heading_deg', 45.))):
+                if not nav.align_for_travel(target, deadline, completed + 1):
+                    return 1
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not nav.nav_through_poses_client.wait_for_server(timeout_sec=min(3., remaining)):
+            nav.error('NavigateThroughPoses 서버가 준비되지 않았습니다. 이동하지 않습니다.')
+            return 1
+        if time.monotonic() >= deadline:
+            return 1
+        passage = ThroughPassage(len(waypoints), completed, progress)
+        for pose in poses[completed:]:
+            pose.header.stamp = nav.get_clock().now().to_msg()
+        # Prepared workers reuse BasicNavigator; never consume old action feedback.
+        nav.feedback = None
+        nav.info(f'연속 경로: {completed + 1}~{len(waypoints)}번 지점, '
+                 '중간점 통과 후 최종 지점에서만 정지·방향 정렬')
+        if not nav.goThroughPoses(poses[completed:], behavior_tree=str(tree)):
+            return 1
+        arrived = wait_for_task(nav, deadline, len(waypoints), waypoint=waypoints[-1],
+                                planned_route=True, passage=passage)
+        completed = passage.completed
+        if not arrived:
+            reason = getattr(nav, 'navigation_retry_reason', None)
+            if recovery_retries and reason:
+                prepare_navigation_retry(nav, waypoints[completed], deadline, completed + 1,
+                                         attempt, retries, reason)
+                continue
+            return 1
+        if not passage.update(nav.getFeedback()):
+            nav.error('Nav2가 종료됐지만 모든 중간점 통과가 확인되지 않아 완료 처리하지 않습니다.')
+            nav.wait_until_stopped(timeout=min(5., max(0., deadline-time.monotonic())))
+            return 1
+        completed = passage.completed
+        if finish_waypoint(nav, waypoints[-1], deadline, len(waypoints),
+                           is_final=True, require_yaw=True):
+            if progress:
+                progress.complete(len(waypoints))
+            return 0
+        if recovery_retries and getattr(nav, 'position_retry_requested', False):
+            prepare_navigation_retry(nav, waypoints[-1], deadline, len(waypoints),
+                                     attempt, retries, 'position_tolerance_exceeded')
+            continue
+        if attempt >= retries or not getattr(nav, 'position_retry_before_yaw', False):
+            return 1
+    return 1
 
 
 # 현재 좌표만 다시 시도하기 전 준비 (정지, 최신 위치, 액션 소유 확인).
@@ -1382,6 +1477,14 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
     trees = {mode: Path(tree_dir) / f'navigate_{mode}.xml'
              for mode in {point.get('mode', 'forward') for point in waypoints}}
     precision = getattr(nav, 'nav2_precision_pose', False)
+    through = getattr(nav, 'through_intermediate', False) and len(waypoints) > 1
+    through_tree = Path(tree_dir) / 'navigate_through_forward.xml'
+    if through:
+        if (set(trees) != {'forward'} or not getattr(nav, 'nav2_position_then_yaw', False)
+                or precision or continuous_intermediate or getattr(nav, 'final_staging_distance', 0.)):
+            raise RuntimeError('중간점 연속 통과는 전진 위치 도착 후 방향 정렬 모드 전용입니다.')
+        if not through_tree.is_file():
+            raise RuntimeError(f'연속 경로 동작 파일이 없습니다: {through_tree}')
     if precision:
         if set(trees) != {'forward'}:
             raise RuntimeError('정밀 접근은 전진 경로 전용입니다.')
@@ -1404,6 +1507,9 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
     if precision:
         nav.info('각 지점: Nav2 주행 → 5cm 이내 감속·XY/yaw 동시 평가 → 저속 정렬. '
                  '모든 지점에서 XY 2cm 및 yaw 3° 검증; 별도 도착 Spin 없음.')
+    elif through:
+        nav.info('하나의 Nav2 경로로 중간점 통과 → 최종 좌표 도착·정지 → 목표 yaw 회전. '
+                 '중간점 반경 0.06 m, 최종 좌표/방향 검증 유지.')
     elif getattr(nav, 'nav2_position_then_yaw', False):
         nav.info('각 지점: Nav2 전진 피드백 주행 → 좌표 도착·정지 → 목표 yaw 회전. '
                  '목표까지 계획 경로 기준 접근; 최종 좌표/방향 검증 유지.')
@@ -1460,6 +1566,8 @@ def run_waypoints(nav, waypoints, timeout, tree_dir=None,
     if nav.departure_in_progress:
         departure_flag_consume(departure_flag, departure_consumed)
     nav.departure_in_progress = False
+    if through:
+        return run_through_waypoints(nav, waypoints, goal_pose_list, deadline, through_tree)
     for index, (waypoint, pose) in enumerate(zip(waypoints, goal_pose_list), start=1):
         if progress and index <= progress.state['completed']:
             nav.info(f'Waypoint {index}: 이번 명령에서 완료한 구간은 반복하지 않습니다.')
@@ -1662,6 +1770,8 @@ def main(argv=None, prepared_nav=None):
                         help='Nav2에서 마지막 직선 접근으로 전환하는 거리(m), 기본 0.10')
     parser.add_argument('--continuous-intermediate', action='store_true',
                         help='중간 지점 정지 후 다음 구간의 전진/후진 방향에 맞춰 회전')
+    parser.add_argument('--through-intermediate', action='store_true',
+                        help='전진 경로를 NavigateThroughPoses로 연결, 중간점 정지 없이 최종점만 정렬')
     parser.add_argument('--nav2-position-then-yaw', action='store_true',
                         help='각 좌표까지 Nav2 주행 후 정지하고 목표 yaw 회전; 이동 전 회전/별도 접근 없음')
     parser.add_argument('--nav2-precision-pose', action='store_true',
@@ -1672,7 +1782,8 @@ def main(argv=None, prepared_nav=None):
     if not 0 <= args.navigation_retries <= 3:
         parser.error('--navigation-retries는 0~3이어야 합니다.')
     if args.navigation_retries and (args.namespace.strip('/') not in ('burger1','burger2')
-            or not args.nav2_position_then_yaw or not args.align_before_navigation):
+            or not args.nav2_position_then_yaw or not (
+                args.align_before_navigation or args.align_large_heading_before_navigation)):
         parser.error('재시도는 burger1 위치 후 방향 모드와 출발 전 방향 정렬이 필요합니다.')
     if not math.isfinite(args.prealign_heading_deg) or not 45 <= args.prealign_heading_deg <= 120:
         parser.error("prealign-heading-deg must be between 45 and 120")
@@ -1685,6 +1796,8 @@ def main(argv=None, prepared_nav=None):
         parser.error('정밀 접근은 다른 접근/정렬 모드와 함께 사용할 수 없습니다.')
     if args.nav2_position_then_yaw and (args.continuous_intermediate or args.final_staging_distance):
         parser.error('--nav2-position-then-yaw는 연속 중간점/최종 진입점 모드와 함께 사용할 수 없습니다.')
+    if args.through_intermediate and not args.nav2_position_then_yaw:
+        parser.error('--through-intermediate는 --nav2-position-then-yaw가 필요합니다.')
     if not math.isfinite(args.final_staging_distance) or not (
             args.final_staging_distance == 0 or .12 <= args.final_staging_distance <= .25):
         parser.error('--final-staging-distance는 0 또는 0.12~0.25 m여야 합니다.')
@@ -1713,6 +1826,8 @@ def main(argv=None, prepared_nav=None):
                 args.final_post_turn_xy_tolerance < tuning.get('xy_goal_tolerance', 0.05)):
             parser.error('최종 회전 후 위치 허용반경은 이동 도착 기준 이상이어야 합니다.')
         waypoints = load_waypoints(args.waypoints)
+        if args.through_intermediate and any(p['mode'] != 'forward' for p in waypoints):
+            parser.error('--through-intermediate는 전진 경로만 지원합니다.')
         if args.final_staging_distance and waypoints[-1]['mode'] != 'forward':
             parser.error('최종 진입점 접근은 전진 경로만 지원합니다.')
         print(f'도착 튜닝: {tuning or "기존 Nav2 설정 사용"}')
@@ -1734,7 +1849,9 @@ def main(argv=None, prepared_nav=None):
     if args.nav2_precision_pose:
         print('주행 순서: 각 좌표까지 Nav2 전진 피드백 주행 → 5cm 이내 저속 XY/yaw 동시 보정', flush=True)
     elif args.nav2_position_then_yaw:
-        if args.skip_intermediate_yaw:
+        if args.through_intermediate:
+            print('주행 순서: 중간점은 연결 경로로 통과 → 최종 지점 정지·목표 yaw 정렬', flush=True)
+        elif args.skip_intermediate_yaw:
             print('주행 순서: 중간 통로는 위치 확인 후 다음 경로 → 최종 지점만 목표 yaw 정렬',flush=True)
         else:
             print('주행 순서: 각 좌표까지 Nav2 전진 피드백 주행 → 정지 → 해당 목표 yaw 회전',flush=True)
@@ -1769,6 +1886,7 @@ def main(argv=None, prepared_nav=None):
                                if args.final_yaw_tolerance_deg is not None else None)
     nav.prealign_heading_deg = args.prealign_heading_deg
     nav.skip_intermediate_yaw = args.skip_intermediate_yaw
+    nav.through_intermediate = args.through_intermediate
     nav.align_large_heading_before_navigation = args.align_large_heading_before_navigation
     nav.position_arrival_retries = args.position_arrival_retries
     nav.navigation_retries = args.navigation_retries

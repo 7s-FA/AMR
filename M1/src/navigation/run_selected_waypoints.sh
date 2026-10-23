@@ -27,7 +27,8 @@ python3 "$HERE/station_routes.py" "$ROOT/host_ws/src/waffle_navigation/config/wa
 DEPARTURE_FLAG="$ROOT/data/burger1/departure_pending"
 WAYPOINT_ARGS=(--waypoints "$TEMP" --pre-backup-distance 0 --pre-turn-angle-deg 0 --final-yaw-tolerance-deg 3
       --final-post-turn-xy-tolerance 0.06 --position-arrival-retries 1
-      --align-large-heading-before-navigation --prealign-heading-deg 100 --skip-intermediate-yaw)
+      --align-large-heading-before-navigation --prealign-heading-deg 100 --skip-intermediate-yaw
+      --through-intermediate)
 # Host routes retry a failed coordinate without repeating departure or completed legs.
 if [[ "${BURGER_COMMON_RETRY:-}" == 1 ]];then
   # The mission policy owns the retry budget; do not multiply inner retries.

@@ -7,7 +7,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash /home/ubuntu/final_robot_ws/robot/burger1/navigation/start_host_ready.sh
+ExecStart=/bin/bash /home/example_robot/final_robot_ws/robot/burger1/navigation/start_host_ready.sh
 KillSignal=SIGINT
 TimeoutStopSec=8
 Restart=on-failure
