@@ -111,7 +111,7 @@ AMR/
 │   ├── src/navigation/
 │   ├── src/runtime/
 │   └── runtime_manifest.json
-├── F1/                               # 와플 영역: 기존 image/src/map 유지
+├── F1/                               # 와플 패키지·인터페이스 (F1/README.md 참고)
 ├── M3/                               # 기존 image/src/map 유지
 ├── common/
 │   ├── navigation/                   # 작업 접수·모드·제어권·정지·속도 제한
@@ -136,12 +136,56 @@ AMR/
 ```text
 AMR/
 ├── F1/
+│   ├── README.md
 │   ├── image/
 │   │   └── .gitkeep
 │   ├── map/
 │   │   └── .gitkeep
-│   └── src/
-│       └── .gitkeep
+│   ├── robot3_interfaces/
+│   │   ├── CMakeLists.txt
+│   │   ├── action/
+│   │   │   └── Waffle.action
+│   │   └── package.xml
+│   ├── src/
+│   │   └── .gitkeep
+│   └── waffle/
+│       ├── LICENSE
+│       ├── calibration/
+│       │   ├── calibration_details.npz
+│       │   ├── calibration_matrix.npy
+│       │   └── distortion_coefficients.npy
+│       ├── config/
+│       │   ├── docking_params.yaml
+│       │   ├── nav2_params.yaml
+│       │   ├── scan_filter.yaml
+│       │   └── turtlebot3_waffle.yaml
+│       ├── factory_map.pgm
+│       ├── factory_map.yaml
+│       ├── launch/
+│       │   └── system.launch.py
+│       ├── make_keepout_mask.py
+│       ├── package.xml
+│       ├── resource/
+│       │   └── waffle
+│       ├── setup.cfg
+│       ├── setup.py
+│       ├── test/
+│       │   ├── linear_test.py
+│       │   ├── test_copyright.py
+│       │   ├── test_flake8.py
+│       │   └── test_pep257.py
+│       └── waffle/
+│           ├── __init__.py
+│           ├── board_pose.py
+│           ├── cmd_vel_selector.py
+│           ├── docking_config.py
+│           ├── docking_motion.py
+│           ├── docking_test.py
+│           ├── host_action_server.py
+│           ├── linear.py
+│           ├── main.py
+│           ├── navigator.py
+│           └── shared_data.py
 ├── M1/
 │   ├── config/
 │   │   ├── camera.yaml

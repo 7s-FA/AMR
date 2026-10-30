@@ -1,0 +1,10 @@
+string command
+float32 cmd_val
+---
+bool success
+string message
+---
+float32 robot_x
+float32 robot_y
+string robot_theta
+string message
