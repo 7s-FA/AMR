@@ -137,17 +137,11 @@ AMR/
 AMR/
 ├── F1/
 │   ├── README.md
-│   ├── image/
-│   │   └── .gitkeep
-│   ├── map/
-│   │   └── .gitkeep
 │   ├── robot3_interfaces/
 │   │   ├── CMakeLists.txt
 │   │   ├── action/
 │   │   │   └── Waffle.action
 │   │   └── package.xml
-│   ├── src/
-│   │   └── .gitkeep
 │   └── waffle/
 │       ├── LICENSE
 │       ├── calibration/
