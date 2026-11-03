@@ -10,7 +10,7 @@ while [[ "$_amr_dir" != / && ! -f "$_amr_dir/runtime.env" ]]; do
 done
 if [[ -f "$_amr_dir/runtime.env" ]]; then source "$_amr_dir/runtime.env"; fi
 unset _amr_dir
-# Camera only: preserve optics/calibration; no GPIO or motion commands.
+# Camera only: preserve optics/calibration; no motion commands.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROBOT=burger1

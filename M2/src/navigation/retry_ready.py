@@ -35,7 +35,7 @@ def main():
     parser.add_argument('--source', choices=['manual', 'host'], required=True)
     parser.add_argument('--command-id', default='')
     parser.add_argument('--stage', default='navigation')
-    parser.add_argument('--timeout', type=float, default=5.)
+    parser.add_argument('--timeout', type=float, default=15.)  # 2026-10-13 5→15초: 새 노드가 AMCL(map) 위치를 찾는 데 1~9초 걸려 재시도가 시간 초과로 실패
     args = parser.parse_args()
     data = Path(__file__).absolute().parents[3]/'data'/args.robot
     import rclpy

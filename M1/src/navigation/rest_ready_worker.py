@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # ========================================================================
 # 역할: burger1 REST(대기장소) 대기 작업자. rest_forward 코드를 미리 import 하고 odom·통신 감시만 유지한다.
-#       대기 중에는 GPIO·속도 발행자를 잡지 않고, 요청이 오면 그때 만든다.
+#       대기 중에는 속도 발행자를 잡지 않고, 요청이 오면 그때 만든다.
 # 실행: burger1-rest-ready.service → start_rest_ready.sh → rest_ready_worker.py (ensure_rest_ready.sh 가 켬)
 # 호출 관계: run_rest.sh → waypoint_client.py → 소켓 → 여기 → rest_forward.main(prepared=...).
 # ========================================================================
-"""Burger1 REST standby: feedback/graph only, GPIO and command publisher per execution."""
+"""Burger1 REST standby: feedback/graph only, command publisher per execution."""
 import hashlib,importlib.util,json,os,signal,socket,threading,time
 from pathlib import Path
 from types import SimpleNamespace
@@ -76,7 +76,7 @@ def main():
     node.create_subscription(Odometry,cfg['odom_topic'],receive,qos_profile_sensor_data)
     node.create_subscription(String,'motion_owner/status',lambda msg:owner.update(
         mode=msg.data,received=time.monotonic()),qos_profile_sensor_data)
-    # Graph reader is retained; no GPIO claim and NO velocity publisher in standby.
+    # Graph reader is retained; NO velocity publisher in standby.
     prepared.guard=GraphGuard(cfg['cmd_topic'],node.get_name(),node.get_namespace(),'rest')
     runtime=Path(os.environ.get('XDG_RUNTIME_DIR','/run/user/'+str(os.getuid())))
     address=runtime/'burger1-rest-ready.sock';meta=address.with_suffix('.json')
@@ -97,7 +97,7 @@ def main():
     try:
         address.unlink(missing_ok=True);server.bind(str(address));os.chmod(address,0o600)
         server.listen(1);server.setblocking(False);meta.write_text(json.dumps(state))
-        print('REST standby prepared: no GPIO or command publisher',flush=True)
+        print('REST standby prepared: no command publisher',flush=True)
         next_source_check=0.
         while rclpy.ok() and not stopping:
             rclpy.spin_once(node,timeout_sec=.05)
@@ -117,7 +117,7 @@ def main():
                     if request['op']=='probe':
                         reply={'type':'result','code':0,'owner':owner,'odom':odom,
                                'command_publishers':len(node.get_publishers_info_by_topic(cfg['cmd_topic'])),
-                               'gpio_claimed':False,'motion_sent':False}
+                               'motion_sent':False}
                     else:
                         end=time.monotonic()+1
                         while (owner['mode']!='direct' or time.monotonic()-owner['received']>.8) and time.monotonic()<end:

@@ -7,10 +7,10 @@
 import bisect, glob, json, math, os, sys
 from pathlib import Path
 
-robot = sys.argv[1] if len(sys.argv) > 1 else ('burger1' if Path('/home/example_robot/AMR/.runtime/M1').exists() else 'burger2')
+robot = sys.argv[1] if len(sys.argv) > 1 else ('burger1' if Path('/home/ubuntu/AMR/.runtime/M1').exists() else 'burger2')
 key = sys.argv[2] if len(sys.argv) > 2 else ''
 M = 'M1' if robot == 'burger1' else 'M2'
-L = f'/home/example_robot/AMR/.runtime/{M}/final_robot_ws/data/{robot}/docking_logs'
+L = f'/home/ubuntu/AMR/.runtime/{M}/final_robot_ws/data/{robot}/docking_logs'
 runs = [d for d in sorted(glob.glob(L + '/20*')) if os.path.exists(d + '/summary.json') and key in os.path.basename(d)]
 if not runs:
     sys.exit('도킹 로그 없음')

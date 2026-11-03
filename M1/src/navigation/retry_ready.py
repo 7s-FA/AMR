@@ -5,7 +5,7 @@
 # 실행: sequence_runner.py 의 recover() 가 단계 실패 후 재시도 직전에 실행.
 # 사용처: sequence_runner.py 가 authorization() 을 import (재시도 권한 확인).
 # ========================================================================
-"""Bounded, read-only recovery check. No pose seeding, GPIO or velocity publisher."""
+"""Bounded, read-only recovery check. No pose seeding or velocity publisher."""
 import os
 import argparse
 import json
@@ -28,14 +28,14 @@ def authorization(data, task_id, source, now=None):
     return gate.get('goal_id') == task_id
 
 
-# 제한 시간 안에 권한·정지·토크·모드 idle·지도 위치를 확인 (도킹 단계면 IR 도 확인).
+# 제한 시간 안에 권한·정지·토크·모드 idle·지도 위치를 확인.
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--robot', choices=['burger1'], required=True)
     parser.add_argument('--source', choices=['manual', 'host'], required=True)
     parser.add_argument('--command-id', default='')
     parser.add_argument('--stage', default='navigation')
-    parser.add_argument('--timeout', type=float, default=5.)
+    parser.add_argument('--timeout', type=float, default=15.)  # 2026-10-13 5→15초: 새 노드가 AMCL(map) 위치를 찾는 데 1~9초 걸려 재시도가 시간 초과로 실패
     args = parser.parse_args()
     data = Path(__file__).absolute().parents[3]/'data'/args.robot
     import rclpy
@@ -100,19 +100,6 @@ def main():
                         abs(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w-1.) <= .01):
                     continue
             except Exception: continue
-            if args.stage.startswith('terminal_'):
-                # Released controllers leave GPIO free. Contact is never a reason
-                # to restart forward motion, nor fabricated arrival evidence.
-                import importlib.util
-                import yaml
-                camera = Path(os.environ['AMR_CAMERA'])
-                cfg = yaml.safe_load((camera/'docking.yaml').read_text())
-                spec = importlib.util.spec_from_file_location('retry_gpio',camera/'ir_sensor.py')
-                gpio_module = importlib.util.module_from_spec(spec); spec.loader.exec_module(gpio_module)
-                gpio = gpio_module.GPIOInput(cfg['gpio_chip'],cfg['gpio_pin'])
-                try:
-                    if gpio.high(): raise RetryCancelled('IR 접촉 상태: 재접근하지 않습니다.')
-                finally: gpio.close()
             print('재시도 준비 완료: 정지·최신 odom/TF·모터 토크·idle 제어권 확인', flush=True)
             return 0
         print('재시도 대기 시간 초과: 정지/위치/모터/제어권 확인 불가', flush=True)

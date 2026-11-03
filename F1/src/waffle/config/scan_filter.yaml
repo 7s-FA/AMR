@@ -1,0 +1,27 @@
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: remove_linear_motor
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_footprint
+        min_x: 0.05
+        max_x: 0.09
+        min_y: -0.06
+        max_y: -0.02
+        min_z: 0.10
+        max_z: 0.16
+        invert: false
+
+    filter2:
+      name: remove_front_board
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_scan
+        min_x: 0.22
+        max_x: 0.28
+        min_y: -0.09
+        max_y: 0.09
+        min_z: -0.10
+        max_z: 0.10
+        invert: false

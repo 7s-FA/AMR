@@ -4,7 +4,7 @@
 
 2026-10-22 15:36 KST **M1 적용 완료**. 사용자가 지정 주차 완료·정지를 확인한 뒤 원본 해시와 종료된 임무를 재확인하고 설정을 백업했다. `burger1-nav2.service`만 재시작했으며 실제 파라미터 `0.02`, controller_server와 bt_navigator의 active 상태를 확인했다. 이동 목표는 보내지 않았으며 실물 코너 주행 확인은 다음 시험에서 필요하다.
 
-원격 백업: `/home/example_robot/AMR/M1/config/nav2.yaml.before-corner-20261022-153536`. 조립대 접근 경로·도킹 변경은 이 배포에 포함하지 않았다.
+원격 백업: `/home/ubuntu/AMR/M1/config/nav2.yaml.before-corner-20261022-153536`. 조립대 접근 경로·도킹 변경은 이 배포에 포함하지 않았다.
 
 ## 변경
 
@@ -25,7 +25,7 @@ Nav2의 OscillationCritic은 전진 명령이 이 기준 이하일 때 회전 �
 
 모의 경로 최대 중심선 편차는 약 7.4cm였다. 실제 장애물·바퀴 응답·위치 추정이 없는 시험이므로 실물의 무정지 통과를 보장하지 않는다. 다음 실물 시험에서 코너 편차, 정체, 장애물 여유를 확인해야 한다.
 
-검증 자료와 실기 원본·후보: `/home/example_operator/final_project/.runtime/diagnostics/m1-way1-flow-20261022/`. 실제 서비스 설정은 `/home/example_robot/AMR/M1/config/nav2.yaml`을 참조하며 실행 폴더의 YAML은 이 파일로 연결되어 있다.
+검증 자료와 실기 원본·후보: `/home/ryu/final_project/.runtime/diagnostics/m1-way1-flow-20261022/`. 실제 서비스 설정은 `/home/ubuntu/AMR/M1/config/nav2.yaml`을 참조하며 실행 폴더의 YAML은 이 파일로 연결되어 있다.
 
 ## 적용 후 실물 결과
 
@@ -48,4 +48,4 @@ Nav2의 OscillationCritic은 전진 명령이 이 기준 이하일 때 회전 �
 
 모의 시험은 설치된 DWB 후보 생성기·평가기와 기록된 경로, 빈 장애물 지도 및 이상적인 차동구동을 사용했다. 실제 바퀴·위치추정·혼잡 상황의 부드러움은 추가 실물 주행 확인이 필요하다. 자료: `.runtime/diagnostics/m1-corner-followup-20261022/`.
 
-2026-10-22 16:07 KST 적용 확인: 주문 없음·M1 임무/도킹 종료·모터 출력 0 확인 후 M1 Nav2만 재시작했다. 실제 노드의 `path_heading_weight=0.003`, `path_lookahead=0.16`과 controller_server / bt_navigator active를 확인했다. M2에는 배포하지 않았다. 적용 후 추가 실물 이동은 실행하지 않았다. 백업: `/home/example_robot/AMR/.runtime/diagnostics/m1-corner-flow-20261022/backup-20261022-160547`.
+2026-10-22 16:07 KST 적용 확인: 주문 없음·M1 임무/도킹 종료·모터 출력 0 확인 후 M1 Nav2만 재시작했다. 실제 노드의 `path_heading_weight=0.003`, `path_lookahead=0.16`과 controller_server / bt_navigator active를 확인했다. M2에는 배포하지 않았다. 적용 후 추가 실물 이동은 실행하지 않았다. 백업: `/home/ubuntu/AMR/.runtime/diagnostics/m1-corner-flow-20261022/backup-20261022-160547`.

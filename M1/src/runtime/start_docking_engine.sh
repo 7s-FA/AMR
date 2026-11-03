@@ -30,6 +30,7 @@ WARM_MODE=""
 case "$*" in
  '--mode normal --execute --auto-start --exit-on-result') WARM_MODE=normal ;;
  '--mode parking --execute --auto-start --exit-on-result') WARM_MODE=parking ;;
+ '--mode assembly --execute --auto-start --exit-on-result') WARM_MODE=assembly ;;
 esac
 if [[ -n "$WARM_MODE" ]];then
  if /usr/bin/python3 "$SCRIPT_DIR/docking_warm_client.py" burger1 --mode "$WARM_MODE" --check;then

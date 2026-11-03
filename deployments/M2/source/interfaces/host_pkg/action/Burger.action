@@ -1,0 +1,18 @@
+# Interface agreed from the project command table (2026-10-01).
+# Motion commands: GO_TO_MAT, GO_TO_ASM, GO_TO_REST, GO_TO_PARK.
+# Controls: EMER_STOP latches stop; RESTART clears latch only, never resumes a goal.
+string command
+# Percent of configured robot maximum, not m/s. Motion requires >0 and <=100.
+float32 cmd_val
+---
+bool success
+# IDLE on confirmed success, ERROR on failure. Details in robot diagnostics/logs.
+string message
+---
+# Map coordinates, metres. Only publish when a fresh localized pose is available.
+float32 robot_x
+float32 robot_y
+# FORWARD or BACKWARD: travel direction, NOT a numerical yaw angle.
+string robot_theta
+# IDLE means normal in the supplied table; it does not mean the action completed.
+string message

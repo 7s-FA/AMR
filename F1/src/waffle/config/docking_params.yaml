@@ -1,0 +1,83 @@
+# 변경 후 재시작 (빌드 불필요). CLI 옵션이 YAML보다 우선합니다.
+# 거리 기준: 카메라–보드 평면. 카메라 수평·정면, 같은 방향의 2×2 마커 배치 전제.
+
+# 보드 / 카메라 설치 위치
+marker_mm: 30.0                        # 마커 검은 정사각형 한 변 [mm], 흰 여백 제외
+gap_mm: 10.0                           # 마커 검은 테두리 사이 간격 [mm]
+target_cm: 2.0                         # 최종 카메라–보드 간격 [cm], 1~15; 오도메트리 추정값
+camera_forward_mm: 95.0                # base_footprint 기준 카메라 위치 [mm], 앞쪽 +
+camera_left_mm: 60.0                   # base_footprint 기준 카메라 위치 [mm], 왼쪽 +
+
+# 최종 정렬: 거리·좌우·방향 조건 모두 만족
+align_min_m: 0.145                     # 최종 정렬 허용 거리 하한 [m]
+align_max_m: 0.225                     # 최종 정렬 허용 거리 상한 [m]
+align_lateral_m: 0.005                 # 카메라 기준 보드 중심의 좌우 허용 오차 [m]
+align_yaw_deg: 1.5                     # 보드 정면과 카메라 전방의 방향 허용 오차 [도]  #기존 2.5
+align_goal_m: 0.15                     # 비전 접근 목표 거리 [m], align_min~align_max 사이
+settle_s: 0.7                          # 정렬 조건과 오도메트리 정지를 연속 확인할 시간 [초]
+
+# 시작 거리 / 근접 제한
+start_min_m: 0.195                     # 시작 거리 하한 [m], 실제 하한은 max(이 값, prep_min_m)
+start_max_m: 1.0                       # 시작 거리 상한 [m]
+too_close_m: 0.10                      # 비전 단계에서 이 거리 미만이면 중단 [m]
+
+# 비전 접근·정렬 속도
+align_max_speed_mps: 0.030             # 접근 최대 선속도 [m/s]  #  기존 0.020
+align_min_speed_mps: 0.01              # 이동 시 최소 선속도 [m/s], 드라이버 제한으로 0.01 이상
+align_max_yaw_rate_rps: 0.10           # 좌우 회전 속도 상한 [rad/s], +좌회전/-우회전
+align_distance_gain: 0.4               # 잔여 거리에 곱할 선속도 계수 [1/s], 클수록 빠름
+approach_slow_gain: 0.5                # 근접 감속 계수 [1/s], 계산 후 최소/최대 속도 적용
+approach_stop_m: 0.145                 # 최종 비전 접근 감속 기준 [m]; 준비 단계는 prep_min_m 사용
+
+# 최종 직진: 각속도 0, 경로 이탈 시 중단
+straight_max_speed_mps: 0.06           # 직진 최대 선속도 [m/s] # 기존 0.02
+straight_min_speed_mps: 0.01           # 이동 시 최소 선속도 [m/s], 0.01 이상
+straight_distance_gain: 0.5            # 남은 이동량에 곱할 선속도 계수 [1/s]
+straight_lateral_m: 0.005              # 직진 시작 방향 대비 오도메트리 횡이동 한계 [m], 초과 시 중단
+straight_yaw_deg: 3.0                  # 직진 시작 방향 대비 오도메트리 각도 변화 한계 [도]
+reverse_tolerance_m: 0.005             # 오도메트리상 역방향 이동 허용량 [m]
+overshoot_m: 0.02                      # 목표 이동량 초과 허용량 [m], 초과 시 중단
+stop_remaining_m: 0.003                # 이만큼 남으면 정지 명령 [m], 이후 관성 이동 가능
+progress_step_m: 0.002                 # 진전으로 인정할 이동량 [m]
+progress_timeout_s: 4.0                # 진전 없이 허용할 시간 [초], 초과 시 중단
+
+# 정지 판정
+stationary_speed_mps: 0.005            # 오도메트리 정지 판정 선속도 한계 [m/s]
+stationary_yaw_rate_rps: 0.02          # 오도메트리 정지 판정 각속도 한계 [rad/s]
+stop_stable_s: 0.5                     # 완료 전 정지 상태 유지 시간 [초]
+stop_timeout_s: 3.0                    # 최종 정지 확인 제한시간 [초], stop_stable_s보다 크게
+
+# 제어 주기 / 데이터 유효 시간
+control_period_s: 0.05                 # 제어 주기 [초], 0.05=20Hz
+vision_timeout_s: 0.5                  # 비전 관측 유효 시간 [초], STRAIGHT에는 적용 안 함
+odom_timeout_s: 0.3                    # 오도메트리 수신 제한시간 [초]
+odom_stamp_timeout_s: 0.5              # 오도메트리 메시지 timestamp의 최대 허용 지연 [초]
+camera_timeout_s: 1.0               # 카메라 프레임 제한시간 [초], 초과 시 중단
+test_timeout_s: 300.0                   # 시작 후 전체 시험 제한시간 [초]
+
+# 준비 정렬: 좌우·방향 허용 오차는 최종 정렬과 동일
+prep_goal_m: 0.40                      # 준비 정렬 목표 거리 [m]
+prep_min_m: 0.25                       # 준비 정렬 거리 하한 [m], align_max_m보다 크게
+prep_max_m: 0.42                       # 준비 정렬 거리 상한 [m], start_max_m 이하
+
+# 접근선 추종
+line_lookahead_m: 0.10                 # 고정 전방 주시 거리 [m], 작을수록 좌우 보정에 민감
+line_heading_gain: 1.0                 # 회전 제어 계수 [1/s], 클수록 반응이 강함
+line_max_board_bearing_deg: 15.0       # 보드 중심의 좌우 시야 각도 제한 [도], 작을수록 중앙 유지
+line_turn_only_deg: 20.0               # 보정 방향이 이 각도를 넘으면 제자리 회전 [도]
+
+# 재검출 / 정렬 확인
+vision_reacquire_timeout_s: 2.0        # 관측 실패 시 정지하여 재검출을 기다릴 제한시간 [초]
+vision_reacquire_stable_s: 0.3         # 복귀 전 유효 관측과 정지를 연속 확인할 시간 [초]
+alignment_turn_timeout_s: 8.0          # 제자리 정렬 제한시간 [초], 시간 내 정렬 실패 시 중단
+alignment_check_timeout_s: 5.0         # PRECHECK/FINALCHECK 제한시간 [초], settle_s보다 크게   # 기존 3.0
+align_min_yaw_rate_rps: 0.01           # 제자리 방향 보정의 최소 각속도 [rad/s], 0.01 이상
+
+# 최종 정렬 실패 시 후진 재시도
+alignment_retry_distance_m: 0.15  # 후진 거리 [m]
+alignment_retry_speed_mps: 0.02   # 후진 최대 속도 [m/s]
+alignment_retry_max_count: 5     # 재시도 횟수
+
+# 마커 1개 누락 시 저속 전진 재검출 (정상 관측 3초 이내 등 기존 조건 유지)
+marker_recovery_distance_m: 0.05   # 회당 최대 전진 거리 [m], 0.05=5cm; 재검출 시 조기 정지
+marker_recovery_max_attempts: 3    # 도킹 시도당 전진 복구 횟수 상한 [양의 정수]

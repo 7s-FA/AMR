@@ -29,7 +29,7 @@ class Backend:
         self.service_checked_at=float('-inf')
         profile=self.nav/'action_profile.json'
         self.profile=json.loads(profile.read_text()) if profile.exists() else {'max_linear_mps':.066,'max_angular_rps':.924}
-        if not (0<float(self.profile['max_linear_mps'])<=.08 and 0<float(self.profile['max_angular_rps'])<=1.):raise ValueError('Invalid action speed ceilings')
+        if not (0<float(self.profile['max_linear_mps'])<=.15 and 0<float(self.profile['max_angular_rps'])<=1.):raise ValueError('Invalid action speed ceilings')
         # A restarted action process must never re-authorize a previous action.
         with self.op.lock():
             previous=self.load_gate(self.path)
@@ -109,7 +109,10 @@ class Backend:
     def restart(self):
         with self.op.lock():
             if self.op.busy():raise RuntimeError('ROBOT_BUSY')
-            self.atomic(self.path,{'estop':False,'goal_id':None,'reason':'released_no_resume'})
+            from prestart_recovery import release
+            cleared=release(self.op.data)
+            self.atomic(self.path,{'estop':False,'goal_id':None,'reason':
+                                   'released_prestart_docking_no_resume' if cleared else 'released_no_resume'})
         return True
     # 임무가 끝나면 목표 ID를 비우고, 실패였다면 래치를 건다.
     def finish(self,goal_id,success):

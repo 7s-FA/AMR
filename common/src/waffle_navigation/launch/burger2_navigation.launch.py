@@ -55,6 +55,10 @@ def prepare(context):
             launch_arguments={
                 'namespace': 'burger2', 'use_namespace': 'true',
                 'use_localization': 'False',
+                # M2 can stall while constructing BtNavigator in the shared
+                # component container. Use the existing standalone-node path
+                # so lifecycle readiness is independent of component loading.
+                'use_composition': 'False',
                 'map': LaunchConfiguration('map'),
                 'params_file': generated,
                 'use_sim_time': LaunchConfiguration('use_sim_time'),

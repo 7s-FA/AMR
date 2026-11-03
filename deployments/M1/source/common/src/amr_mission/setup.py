@@ -1,0 +1,2 @@
+from setuptools import setup
+setup(name='amr_mission',version='0.1.0',packages=['amr_mission'],data_files=[('share/ament_index/resource_index/packages',['resource/amr_mission']),('share/amr_mission',['package.xml'])],install_requires=['setuptools'],zip_safe=True,maintainer='Jonghyeon Lee',maintainer_email='jonghyeon9084@gmail.com',description='Robot mission action adapter',license='Apache-2.0',entry_points={'console_scripts':['action_server = amr_mission.action_server:main']})

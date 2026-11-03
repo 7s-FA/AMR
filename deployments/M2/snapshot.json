@@ -1,192 +1,206 @@
 {
-  "robot": "M2",
-  "captured": "2026-10-22",
-  "comparison_base": "6e7b69dedbac73ec59b1b8c08388aa54324c4922",
-  "base_prefix": "",
-  "changes": [
-    {
-      "path": "B2/apply_burger2.sh",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/config/camera.yaml",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/config/docking.yaml",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/config/docking_board.yaml",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/config/parking_board.yaml",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/docking_control_b2.py",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/docking_node_b2.py",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/make_docking_override.py",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/rest_forward_b2.py",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/retry_ready_b2.py",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/run_selected_waypoints_b2.sh",
-      "kind": "extra"
-    },
-    {
-      "path": "B2/terminal_evidence_b2.py",
-      "kind": "extra"
-    },
-    {
-      "path": "M2/config/docking.yaml",
-      "kind": "different"
-    },
-    {
-      "path": "M2/config/docking_board.yaml",
-      "kind": "different"
-    },
-    {
-      "path": "M2/config/nav2.yaml",
-      "kind": "different"
-    },
-    {
-      "path": "M2/config/waypoints.yaml",
-      "kind": "different"
-    },
-    {
-      "path": "M2/runtime_manifest.json",
-      "kind": "different"
-    },
-    {
-      "path": "M2/src/navigation/manage.sh",
-      "kind": "different"
-    },
-    {
-      "path": "M2/src/navigation/retry_ready.py",
-      "kind": "different"
-    },
-    {
-      "path": "M2/src/navigation/run_selected_waypoints.sh",
-      "kind": "different"
-    },
-    {
-      "path": "M2/src/runtime/start_docking_engine.sh",
-      "kind": "different"
-    },
-    {
-      "path": "common/docking_vision/board.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/docking_vision/docking_config.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/docking_vision/vision.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/navigation/boot_prepare.sh",
-      "kind": "extra"
-    },
-    {
-      "path": "common/navigation/host_prepare.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/navigation/sequence_runner.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/runtime/dock_log.py",
-      "kind": "extra"
-    },
-    {
-      "path": "common/runtime/docking_standby.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/runtime/docking_warm_client.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/src/amr_mission/amr_mission/action_server.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/src/amr_mission/amr_mission/backend.py",
-      "kind": "different"
-    },
-    {
-      "path": "common/src/waffle_navigation/behavior_trees/navigate_through_forward.xml",
-      "kind": "extra"
-    },
-    {
-      "path": "common/src/waffle_navigation/scripts/nav2_waypoints.py",
-      "kind": "different"
-    },
-    {
-      "path": "systemd/M2/burger2-boot-prepare.service",
-      "kind": "extra"
-    },
-    {
-      "path": "tests/test_action_contract.py",
-      "kind": "different"
-    },
-    {
-      "path": "tests/test_action_ros.py",
-      "kind": "different"
-    },
-    {
-      "path": "tests/test_backend.py",
-      "kind": "different"
-    }
-  ],
-  "runtime_overrides": [
-    {
-      "source": "common/runtime/docking_node.py",
-      "runtime_path": "final_robot_camera/docking_node.py"
-    },
-    {
-      "source": "common/runtime/docking_control.py",
-      "runtime_path": "final_robot_camera/docking_control.py"
-    },
-    {
-      "source": "M2/config/docking.yaml",
-      "runtime_path": "final_robot_camera/docking.yaml"
-    },
-    {
-      "source": "M2/src/navigation/run_selected_waypoints.sh",
-      "runtime_path": "final_robot_ws/robot/burger2/navigation/run_selected_waypoints.sh"
-    },
-    {
-      "source": "common/navigation/rest_forward.py",
-      "runtime_path": "final_robot_ws/robot/burger2/navigation/rest_forward.py"
-    },
-    {
-      "source": "common/navigation/terminal_evidence.py",
-      "runtime_path": "final_robot_ws/robot/burger2/navigation/terminal_evidence.py"
-    },
-    {
-      "source": "M2/src/navigation/retry_ready.py",
-      "runtime_path": "final_robot_ws/robot/burger2/navigation/retry_ready.py"
-    }
-  ],
-  "absent_in_deployment": [],
-  "notes": "Text source differences only. Missing deployment files are inventory, not deletion requests. External linear files are stored separately."
+  "captured": "2026-11-03",
+  "source": "device-local",
+  "device": "M2",
+  "source_root": "/home/ubuntu/AMR",
+  "excluded": "Runtime state, logs, backups, caches, training weights and recordings. Workcell private JSON settings and raw image fixtures stay on device.",
+  "sha256": {
+    "M2/README.md": "90d6b7cd7a30e7a48722c57d6ec856b68784ad3c757d783686e62b7b2cbee0d1",
+    "M2/config/camera.yaml": "7081d8925a425a5792734992d1fb28158ad5ffddf669d5214d794bf6f0062ea3",
+    "M2/config/docking.yaml": "204701328f81079528658e4faddf1aa31209c9b32b174195815c53660f7dacc3",
+    "M2/config/docking_board.yaml": "f62adf6ee8dd4f2b25245eed44c5019db224090e6bf70398f56f378c7803b4ce",
+    "M2/config/nav2.yaml": "a804fa4e6416f76695224c3930864c6b1557b8a424bb7bcf3590313206a7345e",
+    "M2/config/parking_board.yaml": "bfac91ff5535231fd505a8091ab0e6ce94832255216ef84ba2ca7b55d916d869",
+    "M2/config/robot.yaml": "ed0b76d597df0d50c8dc58e231252f07591f58192441ef7657d8d0d4163be11c",
+    "M2/config/routes.yaml": "88820aada6cf5f69751f27774b215ab31d24560b17b7922ca0256bb8dacab8a4",
+    "M2/config/waypoints.yaml": "ff52fca047f43618927c60f8ea77419df95b3da3992100267181599e943c8441",
+    "M2/image/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "M2/map/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "M2/map/factory_map.pgm": "7e1fb385deea9b8413880f6b6676706337666ae85ee24cd1e1cf417c39784a46",
+    "M2/map/factory_map.yaml": "6b63251285533b1a124a2480a79a1cb993dd610e94a2c0ecccc47bfbf16e7acc",
+    "M2/runtime_env/pc_burger2_env.bash": "9e369eb6d384edc5f33aa3c16415fc736655d5302740f91534ddf897e1eea8f5",
+    "M2/runtime_env/pc_env.bash": "1544083ee030ddbe69ab3db63c411be4ea3c9af1d5c4c2e56dacc1e7d1665cc2",
+    "M2/runtime_manifest.json": "1c0f5976aed76906cb0a60943899821551b63584f362f69ecd2553ce25a27e9c",
+    "M2/src/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "M2/src/navigation/ensure_docking_ready.sh": "8e4f46ef53b34aaaaeef5dd94f7aa1cec0347d46710bc88c933edad90b309b24",
+    "M2/src/navigation/ensure_rest_ready.sh": "755cd2a519aa30d25331811066e1260d7c0cd6cc7fefd4b9c39e8fef3fb0d22c",
+    "M2/src/navigation/ensure_waypoint_ready.sh": "85bea8f2eb44b5a462e229a8d4111dd23f1b370fb81ed42831265c6237bb5d6f",
+    "M2/src/navigation/launch_localization.sh": "638360cf6bc83857b5cfd35cfee011a9c08e68764f91df8ee19c3e78806c0c18",
+    "M2/src/navigation/launch_nav2.sh": "cd7b300df851b7ea36724ad3361cf7d3ef4a1490ec616e8556fe76cffa523910",
+    "M2/src/navigation/launch_owner.sh": "2ec78e9488242ed07467bb8734b881a0578e3587991a0eeabe5bb63095198c7f",
+    "M2/src/navigation/manage.sh": "4347ef71a69613993fe08e8f325dc2729c4ad0fbfe6e7e6732b77c868f13964a",
+    "M2/src/navigation/mission_entry.sh": "2088515a86989b503d523df32a7608879dd2dfa7c25ff7741500d8255b0bebef",
+    "M2/src/navigation/rest_ready_worker.py": "d243af4419989b29d120bf310237e3e174c78b7472813182b1e567ffe02d2ea1",
+    "M2/src/navigation/retry_ready.py": "aa688f4ae512e25d862d295722da3c20c526dc9b459611bc2a65ef2fc99ff86d",
+    "M2/src/navigation/run_rest.sh": "29670aa14178eb1da068222c96dc4417cda9a7e8e051c65ed1198199d55acf09",
+    "M2/src/navigation/run_selected_waypoints.sh": "c5c7d9e9baed814fb936e05f9900f738a676069717b08c3134abc27ec988b849",
+    "M2/src/navigation/run_waypoints.sh": "1742077263000be081177fb97bef1b6b4268bf1445fc7a9f64099aa02184fb40",
+    "M2/src/navigation/save_start_pose.sh": "a120ba846ef226a87594e97381a22facc4957d41f351e3964382ea3df1d21145",
+    "M2/src/navigation/set_mode.sh": "3cd712f5cdc87dd524e152794f7812e58007935cd3a989c88d0e9c45a6137f88",
+    "M2/src/navigation/start_host_ready.sh": "f6d6adc2227a28be8dbed3b7d3f4672a2214f9e5b4161132e99f75661ef54b3c",
+    "M2/src/navigation/start_rest_ready.sh": "6940c663812bce0450a57e314b7ae8f584614e217992dd9f7c42f89f8add45a2",
+    "M2/src/navigation/start_waypoint_worker.sh": "01a7feac13980e7a3972e071cbd8b191eab02a40e5503528adc9589b49ca0360",
+    "M2/src/navigation/warm.sh": "18ac7c2744c19d059b2a34d989eaa9999a55be94ffcd62db9e34ca379f0d57d3",
+    "M2/src/navigation/waypoint_client.py": "c09c0148b2bb6f7f36078c723d64f625ba7ab7e23cde2c030a6a3587863d24a6",
+    "M2/src/navigation/waypoint_worker.py": "2ede8c21d6ffeaa90d56ca5d0d90241c067f3044621993fc00a0d3d55696f09a",
+    "M2/src/runtime/base.launch.py": "9f378273ab9feea2e02e8b2f4f467a3dad7c9db413c51dc026ec27e41e7c3c1a",
+    "M2/src/runtime/camera_profile.sh": "5cade39d4656800f2be007917b751e7840e621c638de0d1cab65947778a80798",
+    "M2/src/runtime/ir_sensor.py": "aefa2c02adc39cdb469ebc229f8deff63524b7a756f645f98a512465c7422bfb",
+    "M2/src/runtime/setup_camera.sh": "25c9afb5bb419281df45d9e548d546764278d702c478b6601d40986b7ef26ef6",
+    "M2/src/runtime/start_base.sh": "568b0cdf8ea6dcd455baf1f838c94cd23bd755cdb0e43d19c06bc020ac6c1725",
+    "M2/src/runtime/start_camera.sh": "442a2a4424da7f4b70c8105a7769f9b83fbc449d35a5f731ee22c962a3292e02",
+    "M2/src/runtime/start_docking.sh": "040e6db7cb68b200138ab60cc1dd4f35871d174dce686d26cdc5b6b7e723119d",
+    "M2/src/runtime/start_docking_engine.sh": "ed23d7004a2eae6031e367bf8deadaf94f46916d52a33662ae32d8f995b80e33",
+    "M2/src/runtime/start_docking_standby.sh": "9faeb904092c06f9ab0b476b0ada5e6a100de7b5597082628fd16375d1bcc60b",
+    "M2/src/runtime/test_docking_control.py": "b4fcb1e25adc9770b4ea77ab5c63a3f77d19d76c2b06e22bdf98ee1dc489d8b9",
+    "M2/src/runtime/test_docking_node.py": "19983a722fefae4b075cfe8fd3bc01d376093038a7c296a504d867d90d80449c",
+    "common/docking_vision/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "common/docking_vision/board.py": "acbd0e57a08115a73994c452eeb0cc378536c962e00ed6fec390e76ca1b791d1",
+    "common/docking_vision/cli.py": "6994ae6a094139b789ce8600a6ed7b5bf3499eb9bb348c7a537cec2e3f629c4e",
+    "common/docking_vision/docking_config.py": "dea143cbed7179eff1225547f9f6f1a4cf357851e38a50af39ed0b7b0f386edd",
+    "common/docking_vision/generate_station_boards.py": "d3b55e7116b55f2f784cf2fc38b95f3d8539b2c6f091789f163a0696f7486445",
+    "common/docking_vision/source.py": "9d3496733a164cbc917f487c27420f85abf2ba4cb7cef8e5fac2be8559546898",
+    "common/docking_vision/vision.py": "57b97b5692ca08965c715d957c9081799e8f7f7f7cc5b480eae981fc17a52151",
+    "common/navigation/action_gate.py": "9cd46647f41f3fd44f21d5767c63cc9725eb669c61bd405128e622877a9202da",
+    "common/navigation/boot_prepare.sh": "0565d601bc9c57df294a53396568524833ae3743b32c1d27f9ef8889bfc271af",
+    "common/navigation/capture_nav2_failure.py": "d9502675a2e229a77ab3bddca35382b0fd78e6595069737646be00a8bf7d76e3",
+    "common/navigation/check_ready.py": "30d50bcd06c875910d373903fbeae6536c40e2d97cfd38de9c422eb58a8f43e1",
+    "common/navigation/communication_guard.py": "fcafaf53817d60bf55addb2ffe130042cff54b6536d75a6ab1831074baf781a0",
+    "common/navigation/confirm_parked.sh": "3f81dd86931126d6e4d0a0edd987fc79c8db40ad130f431791be66df4f6eff79",
+    "common/navigation/data_flow.py": "9fc3d7bb535a6bc3a4e3fd645d6c2298583e05f8e21b61a6d0c7db0c3bbd42af",
+    "common/navigation/ensure_camera.sh": "18c6173dce895847ed326e0006eacd789c358858ce4f6976cc421d6a15bd9fc6",
+    "common/navigation/host_prepare.py": "64338883a622d6361c337e223463aff47513952b2bf38bcd980df637a5ff4b67",
+    "common/navigation/localization_only.launch.py": "f995149c65a80b94bed7942395915c111cee5c20848e2da6c58f7cdb7957e792",
+    "common/navigation/localization_ready.py": "b6c1961475cfb0956c968266043aca5e58062880999e52e8a29144c22a426e97",
+    "common/navigation/mission.sh": "98d4283a62853612c1e1f6a53324e2746cac42bc4c1e0d475e5c1354da573c0b",
+    "common/navigation/mission_guard.sh": "9ad51e0add8246bcb575b780abbd717d41835b7b5d9db3bb6c192db148dd3ca9",
+    "common/navigation/mission_retry.py": "bec3d435c6f77b7b7fbce3bf6c38377a549be86bb1336f2b8e8293efc2169127",
+    "common/navigation/motion_client.py": "1219f68b2e176858a1957c0d3b8d5c9c7c54a02291899c2df3f8d6e80e8152ec",
+    "common/navigation/motion_mode.py": "beb201e65abd2a1f6700cb0e14bd75e22b211171242dceff156ea2c93ad15824",
+    "common/navigation/motion_owner.py": "a634344dcdff2d225fa7b9d6f8755b0ab6c740750ea8f0aff0decd6aefa968cf",
+    "common/navigation/nav_control_service.sh": "11c4418c8d4b8dacfb31f54a9af2f84a7b01abba51575a36bf1fddd65c912a4b",
+    "common/navigation/nav_env.bash": "8c501d93f1f846788a89d9d3814b1c9292ca6923701f1ac7f31d5f7631601162",
+    "common/navigation/operation.py": "b96eaba511be362d2a1e9b5b93e397f00c4443c9754934e1b4811eb8d0d09531",
+    "common/navigation/ready_monitor.py": "c7e735e6aaffeb5ba2ab6e5d14568b35750f5567e8ac6783c642c72369650a2f",
+    "common/navigation/ready_parallel.py": "fb829be5e25945a84dfb6898fe16e0e00f2d0683ad184e121f0948b2e93d5b6e",
+    "common/navigation/ready_watch.sh": "99099d22decada21431f3d2ea6f264146c4d3055abfdaa500f70a671efe9566c",
+    "common/navigation/rest.sh": "01e81d3f67558e443235a9cd502cdc69a588112b1e5f5d37ce49bcae562856ed",
+    "common/navigation/rest_forward.py": "7ebe6a474dae54df8fc477c9f6894ea51d0000672edd26e8f2cd3e6650461191",
+    "common/navigation/sequence_runner.py": "c48e446d3d93eedee6299d497b9c8a6c73bb34bc86c8ed637c6b19af0f9b7d23",
+    "common/navigation/startup_state.py": "66f472367277e46bd48a956e881105950adfbf6b226cbc18a279656214f97190",
+    "common/navigation/station_routes.py": "c14d00e94a891f6f27dfcb1d27b5dd70f99817bb38020ca0117f48c5f99d51ba",
+    "common/navigation/terminal_evidence.py": "789b02329cdd310841c265ff6dc3f1f3f6bed08d07458c8bc80a99c235da853e",
+    "common/navigation/terminal_wrapper.sh": "e245b9a76fe5f950bfeb110c8a1eba94a2d3c56682789875cdea8e84a41a9041",
+    "common/navigation/watch_ready.sh": "3ea881051d7cb5a933631ca10e0360d11a9ef2ea661251313acb337bdc9b61cc",
+    "common/network/nav2_local_transport.py": "62486c7908f30097ce8414450f1fc53353e52b641c162b2e17b2c689a45b0fc4",
+    "common/network/nav2_network.bash": "88d1029d4a0e5bc22ffb0afe66f2a1c854fd118e82ab450af323c1d7641df3c6",
+    "common/runtime/camera_ipc.py": "4dce3683f0f1b10b18b48cde797e4ca2c1709a90371cf3d309737fc1ea6cdfce",
+    "common/runtime/dock_log.py": "0db8ea2b3729ce758b34839620334edac7b1c751c96f4861f74bb345e7f4a914",
+    "common/runtime/docking_control.py": "450537f731ad2f0d7db3bd06a79d42989caea7de6cb4ed9496f9c40866965add",
+    "common/runtime/docking_network.py": "99a9f3641f45ddd1253a7feedd3d2dad3e72b995129a5529e915d06f66670d3f",
+    "common/runtime/docking_node.py": "4306eb5c4d2a0936af69000a3facbf665edb2b6d08189f8cc93336e4fa13e32a",
+    "common/runtime/docking_recorder.py": "036f12a359e8601aeab743a501b30b74a0ed344c88b58d9afe6d655fa58b429d",
+    "common/runtime/docking_standby.py": "5826ae39211851906b91ce6d91289afdc2fb29cdfa0fb35f75ef1302d80f5fcc",
+    "common/runtime/docking_vision_worker.py": "5dab8c991aa744b3641a8b3cbb918699312e95303e9e48b58d499ecd1aba9e0b",
+    "common/runtime/docking_warm_client.py": "45b23d05d45dae6cf916ff906bcce1e152f7063092fbafbe8bd604de164ddf45",
+    "common/runtime/native_camera.cpp": "e81876e7b71d70de043ede32b577482e2782212cfae215d3403605f8a3199a39",
+    "common/runtime/test_docking_recovery.py": "51cb8476bd4c2192502c7ae9b90ede1ca4870885ba5a30dfc833194bb9cd33a0",
+    "common/runtime/video_http.py": "246ea524efd68bb2233da9b5646d6abf1553845b2b3811a0a806ad4d630b6998",
+    "common/runtime_env/ros_setup_cache.py": "8a3e186ead01f91a66b7221721259b8d4afb01a6ea946e2fbe91e56e4db88724",
+    "common/runtime_env/ros_setup_fast.bash": "d8ecf1a056ddcc894ab1d790e05a14355c81c84ed7b7fba97c0c4b77a6725d4b",
+    "common/src/amr_mission/amr_mission/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "common/src/amr_mission/amr_mission/action_server.py": "1e38b8a873f725c31c5831696893140436db6513d8db6ea1e16555d2cc2c80e9",
+    "common/src/amr_mission/amr_mission/backend.py": "984a5b81955c9d0a943c13d7db5115e837b7da12d568522842b8768e6c41228c",
+    "common/src/amr_mission/package.xml": "2a39675d16e8facded0b029de262f5b00d535145563cceee671d34bd21d68e78",
+    "common/src/amr_mission/resource/amr_mission": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "common/src/amr_mission/setup.cfg": "c2ed5012e32601bf09e820400719591904778f78981806c2ff01fae337dfa87e",
+    "common/src/amr_mission/setup.py": "90018d364bd4f297b5a2097211d9a7faa1cad5dd1a9a4554d569c9fe256157b8",
+    "common/src/waffle_navigation/CMakeLists.txt": "db61b615e96aa608f4528c864f98d18806cffb433199559cb53eb0f1c30308fc",
+    "common/src/waffle_navigation/behavior_trees/navigate_forward.xml": "1b46de86ac3db8706b54b6e6b2103e081e33fa291f3419de60600f09de9b053c",
+    "common/src/waffle_navigation/behavior_trees/navigate_precision_forward.xml": "abf0d68fa30a76e9557a007fe25e108636ac26c618f87d2b68d4a46a443c9c39",
+    "common/src/waffle_navigation/behavior_trees/navigate_reverse.xml": "c3fb0f8c24529e6fd11e957e4b941189c5b341b9d3b81ad9c345d67d66533955",
+    "common/src/waffle_navigation/behavior_trees/navigate_through_forward.xml": "c7b64479e70006a1dfa58736e205127232b1fea1f699a3467edfafab2a602b9b",
+    "common/src/waffle_navigation/config/arrival_tuning.py": "b5805b4e913728f9f8ce6a62814c220b0a0f2dfd5305e0335c301367a2f28870",
+    "common/src/waffle_navigation/config/nav2_burger_params.yaml": "624e0431a3958837c1c11317bfa1d8bb9f285f8df8faf3fb54971279594bd04e",
+    "common/src/waffle_navigation/include/waffle_navigation/position_approach.hpp": "4da40b94b5f5c832e863c586f8568c1156e3913e42112352f715a7b11d663c2c",
+    "common/src/waffle_navigation/include/waffle_navigation/precision_pose.hpp": "38adc613ce4a980e786e28045a6d86a82c05b61552bd0fc70041e7dd9ad6c7b5",
+    "common/src/waffle_navigation/include/waffle_navigation/precision_spin_speed.hpp": "22421765702ea7738e22de3a1c2554f690b6d31470daf343a2f13d9c998594bc",
+    "common/src/waffle_navigation/launch/burger1_navigation.launch.py": "f133378b13b686ecdbe5d3bcb823847526baee8fa99d2052bdb83733f69dd37c",
+    "common/src/waffle_navigation/launch/burger2_navigation.launch.py": "28d94291e0ddb1421ac4fd9c943f06ea28f3f73ab49143896265e97f9e958db3",
+    "common/src/waffle_navigation/launch/lean_bringup_launch.py": "f7dd1454783d91dc034bb88352d53a29e7db6a9ed6c95d89e456c321ea312fcd",
+    "common/src/waffle_navigation/launch/lean_navigation_launch.py": "9bc0d2d81222572ffb8df03b01618a0655c753b0b80715ef6695b760a48a5ac6",
+    "common/src/waffle_navigation/package.xml": "4dd738636c4251f079e9e5982c699ab8cd76fb64b642af50e202851ae4b2c5ef",
+    "common/src/waffle_navigation/precision_behaviors.xml": "f8a2e2af5aa4d4bb24f3b4c63724d7df1dad0363a608bbb1e15c459d36a28ba3",
+    "common/src/waffle_navigation/precision_plugins.xml": "c7f866bebcfc46bafc8f879b5899a6db0456a315c4060d154b025b7b343187a9",
+    "common/src/waffle_navigation/rviz/burger1_navigation.rviz": "f7f713a445d2ff17212150b8d4e2fad86bb2d667e8e4ce819bc8a1e37da0a324",
+    "common/src/waffle_navigation/rviz/burger2_navigation.rviz": "c14d9496c715aa6119da8ec198d471588eb42a94e727acf7f212006600c6bbc7",
+    "common/src/waffle_navigation/scripts/nav2_waypoints.py": "378515fad9ce7828d59d7399fba107a479ccf31920fd3f9277f7d9e11e7ff2e5",
+    "common/src/waffle_navigation/scripts/save_start_pose.py": "5b9301a0f2df0db2d8e24c4e14117a1df819ea0ff0a1f44cdcddb59578c95ec6",
+    "common/src/waffle_navigation/src/position_approach_critic.cpp": "e0fa863165f4a1c04cf00238a0fc8c7e14363e4df8708c96aa15c7146243250f",
+    "common/src/waffle_navigation/src/precision_pose_critic.cpp": "97f8fb82d59dfbdc6272b2b3aafa6ba034a6bb5bbfa9f95ccd53fce7c3288b65",
+    "common/src/waffle_navigation/src/precision_spin.cpp": "f64a3d2ad814221f1435de4b29dec212a140e8024d79c3fdbf65ed28721c5687",
+    "common/src/waffle_navigation/test/position_approach_selftest.cpp": "cba0ad5d5fc1d7ba4e8a4ee90599949862635abf64e9b53454111cd1204b0be5",
+    "common/src/waffle_navigation/test/precision_pose_selftest.cpp": "aa2232997f1d871f9c653ef392576c5e5476d4a51cf1b1a851e36be3b016048d",
+    "common/src/waffle_navigation/test/precision_spin_loadtest.cpp": "1e97447269a04a0538e2a01508072b8a5040389966f805f3a82b47076c73d7dc",
+    "common/src/waffle_navigation/test/precision_spin_selftest.cpp": "3cdbc8a1a03d284c093981736ca1527018f58d6653965579f8060c9b23b7e58a",
+    "common/src/waffle_navigation/test/test_arrival_recovery.py": "0d5bc30398b5b547ddebeeb60bb1c70ae5b9cea0268ad63e28d613ba66f440b7",
+    "common/src/waffle_navigation/test/test_burger2_port.py": "216570cdf8579b17f14695d6c6f67baa894aa8a7b169fe19d2c82177de8b05f7",
+    "common/src/waffle_navigation/test/test_burger2_velocity_samples.py": "eb89b5d200135fda9dae4166e6db235f21d0d3b83186c81fc2ec1f7b9a3832d2",
+    "common/src/waffle_navigation/test/test_departure_retry_flag.py": "d2ff4e9fde656818e1af9abeaf346931aa68aeb0486bfeec41ded95a131fedb0",
+    "common/src/waffle_navigation/test/test_directional_waypoints.py": "bfd8a812ea4ff07b6601f8c139725384816c5c73b6072d6030ff8413dd301a34",
+    "common/src/waffle_navigation/test/test_encoder_departure.py": "ce074b3f0d35154b6ab92bf4d6da43f929f4e11e2370faff7455d8c18cf185b7",
+    "common/src/waffle_navigation/test/test_large_heading_alignment.py": "4a2e092bc5e6ef94aa175e7b8c69baf0cc8033fbec8d6c212d4774acdad58267",
+    "common/src/waffle_navigation/test/test_overshoot_guard.py": "03d63537a47f78132463438846297f0b5377c656ff2983446f9e22debdd35cc6",
+    "common/src/waffle_navigation/test/test_planned_path_guard.py": "c3cbfa160dcf8829cd4125ff41e4f7076ccb2702b3580cd00371b6b5924c7e81",
+    "common/src/waffle_navigation/test/test_position_then_yaw.py": "21bf1063e9543c0b31b145ec65665d9ba11834da1d7a3d49ed20726656305a6c",
+    "common/src/waffle_navigation/test/test_precision_pose_route.py": "17d5374e05ced4cc64b392f37ac84524e3f88e35585a8e3467f07d937b6dd3f1",
+    "common/src/waffle_navigation/test/test_precision_tuning.py": "c425b13f3aafd82dc7ff3d2f3133b13615992992f5550835f3599c4d65d3d3d3",
+    "common/src/waffle_navigation/test/test_staged_final.py": "8cf02f91e0fabb975393e081cdb11661c2a5d4a4c2cf9bba42e6c6ba26029843",
+    "common/src/waffle_navigation/test/test_start_pose.py": "11923c6f27a26e758b4c58799e69a9548615e1c5c91dd94b63d5072ac4f5b10e",
+    "common/src/waffle_navigation/test/test_terminal_approach.py": "6061a733161b2969e6aca39dbc6504ac07729e008e031c28815cde51172b8ad7",
+    "common/src/waffle_navigation/test/test_way12_continuous.py": "bbf5cf595cd2d67460a69818cdf64528c206f2a8c3cda4806fe1b9e8698262ee",
+    "common/src/waffle_navigation/test/test_way4_arrival_retry.py": "e7469ea9f133b69295e8db219d952e0bfef69d501931a2881fdc36f81cb753fd",
+    "common/src/waffle_navigation/test/velocity_samples.cpp": "bc842d64b0408d890a6ae0b5429ebfd4a73d28ec162c5b2377a40d896e69f54c",
+    "interfaces/README.md": "05e156b643036dca2326d9af61ce53016767274b51ac8b16b90aa2700ad87ef4",
+    "interfaces/host_pkg/CMakeLists.txt": "013f5a9740b22d5cbcda2ff372f41f710d86669d6a81fd50ce53682359838332",
+    "interfaces/host_pkg/action/Burger.action": "e04bd3f34ab6a2628d22d1ad9106b3fe4cc4deabc90b266e460bc4c2a93412a3",
+    "interfaces/host_pkg/package.xml": "2dacea3bcd5c005800c3e548c91fa2df4ab60589b6ba009f4b10965cb24328fd",
+    "patches/encoder/README.md": "59b90b3f5c1431b6ede3dd1c058de90f10a131a5c1a97a4861a78c192ab83b6b",
+    "patches/encoder/encoder_recovery_test.cpp": "3252491d00010b653cfa01b327176302709b73d75c4d1e0f1dc3e30fba59e8d9",
+    "patches/encoder/joint_state.patch": "18be95edc393a5811b7e1c26d8df598f154a6e803f4234978dd1b8d63ef944a5",
+    "patches/encoder/turtlebot3_node/include/turtlebot3_node/sensors/joint_state.hpp": "d12d875ef58e124571e2e072ceda44f5c37a9964e629efdb842fb6c13d85c946",
+    "patches/encoder/turtlebot3_node/src/sensors/joint_state.cpp": "c968d53a585b817eb678c5a9d905549a1ae5708ef5e8c118a299a9f4dd2432d1",
+    "scripts/build.sh": "b9892117cf1c609b52094f6287636767525404949ca3c4d83affe8bd262bae1c",
+    "scripts/build_camera.sh": "de4d0f7b07d0ffbc9dbe2094ed3d74a6c691c3939f33dd5b5d84c547bee41e94",
+    "scripts/doctor.py": "07a7edd4ee92825df82413e8e27fc26483f27857705a51153ecdda810e48ab05",
+    "scripts/materialize.py": "0a15e7e986ef23bab1b65393318101e98bbc040ec0c9164596131d969cf20acc",
+    "scripts/repair_install_links.py": "21d84fbbde9d89a06cfc275f16842a8c213b57f0ab91e4c30cb75ed10ced2794",
+    "scripts/robot.py": "d6a30fdfd001f15a6a2d66c4f9e5ae28baad5ae1b38e0dfd0ef66453fcc5b30a",
+    "scripts/update_manifest.py": "b06f5e5667ce768b12cabee0cd855b182768c1faa754adf5c4a3933a94442b48",
+    "systemd/M1/burger1-host-ready.service": "4e05c62e56d2c508ea25812a540d0ec6aba50d89b71a60f52479a9d4a4c2d049",
+    "systemd/M1/burger1-localization.service": "00da128c37e3f57da0abecdb01381242599f17bd4a1cf076dbee026bc8581b3d",
+    "systemd/M1/burger1-motion-owner.service": "f6be3a9a311db0b344c764d80e37fbc5e9ee26abe9a7ef28851a3aa5b46941d2",
+    "systemd/M1/burger1-nav2.service": "46a6c9255e68c44782c5defc58b9a360a8d469fd2534e0e5aed783a6059eb897",
+    "systemd/M1/burger1-waypoint-ready.service": "2b3d5575990afdf9af838df56bb784773a63dc6d08da21a19f62989842202202",
+    "systemd/M2/burger2-boot-prepare.service": "843dc4e453286af4d60bedf06062b622530c3f3b85fa5923017d8836901dd310",
+    "systemd/M2/burger2-host-ready.service": "360cb07ae83340c64497ff82773e4c4cca6250a7d8f5207c40672ec10d46c939",
+    "systemd/M2/burger2-localization.service": "6dac7da55d384f3c92c05c20c4cf0c638b52cf406f90b0446a7299b775283b86",
+    "systemd/M2/burger2-motion-owner.service": "962540ddfaf65bb678255bd14613dd6542b43ede1e9278f5eb17acdae9491ae0",
+    "systemd/M2/burger2-nav2.service": "3304765cf28699fd97d775052b442c20ff25108cb60d8269e0a05d936b567792",
+    "systemd/M2/burger2-waypoint-ready.service": "252730d693a33f79afed8f399ad5ba838adc9c91b66610206564f046a7f6e724",
+    "tests/test_action_contract.py": "76382147d083dfc1486600c1af728cd854328f9d853a119f31f0b202ea5742b9",
+    "tests/test_action_ros.py": "c90cc5680b36c962cb7217267e0e1dc3dbfacc7a53e650c511aac1747f882d03",
+    "tests/test_backend.py": "9bdd9fc0c1e6316abea7739cd083a56e6d6350f53d0462ed24fabaa0ffdc9f17",
+    "tests/test_communication_sync.py": "bb1ae1052f891912fcf4ddf7b09f1ed833d5fdae584fdcbf9469cfce9a1da88b",
+    "tests/test_docking_encoder_start.py": "a1b6da4f96eb95f4f8580135343303cea5930869c7c40696e13a6d2aa54a942e",
+    "tests/test_encoder_retry.py": "418930b314a687a00008a488c0ec2cf239749a510cf7e1fbbb4e2905f6d4a0b5",
+    "tests/test_packaging.py": "2e8fbd5165c0cd7cba06e2e6bdd21f628ab51038684cf2f1658b170e4a936e55",
+    "tests/test_reference_host_ros.py": "d268589271cfc625462d5b08cc6da9efeddc51c2f85d8d21770271a9e8e586a3",
+    "tests/test_rest_and_routes.py": "e12389ffd158b124e6ef0b4ca80045b112f61ceceb0fa142b1be2c5521f66a05",
+    "tests/test_rest_config_reload.py": "d542f161ad5ebb834a89eb73d86e85b787c0e596a23814fb2ed49b0c95be29e6",
+    "tests/test_single_folder.py": "48c3cbe7bb880614c642e5c9d3fdb8f26a9caf0d3c338c01ad96d4efb8019286",
+    "tests/test_synced_docking.py": "3585bd947849f6462288e32817e9ef23509436a5efee16e198cd62a010f1027a",
+    "tests/test_terminal_resume.py": "199bc416266119603d43c85994f8c64faa1e9814cb8184199d810b0f002852b1",
+    "tests/test_timed_departure_args.py": "81c7b931e73740d998d3723d0100559b84e091a8e08bdebaa2901b03a0d202e9"
+  }
 }

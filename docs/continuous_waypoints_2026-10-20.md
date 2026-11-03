@@ -2,7 +2,7 @@
 
 ## 적용 결과
 
-- M1 `192.0.2.104`, M2 `192.0.2.102`에 적용. 최신 odom 정지 및 활성 명령 없음 확인 후 백업·교체.
+- M1 `10.10.142.104`, M2 `10.10.142.102`에 적용. 최신 odom 정지 및 활성 명령 없음 확인 후 백업·교체.
 - 두 로봇의 준비된 웨이포인트 작업자를 다시 불러왔으며, 읽기 전용 `--verify` 성공(`motion_sent: false`). 실제 이동 명령은 보내지 않음.
 - 자재창고 `mat` 경로는 두 지점을 하나의 `NavigateThroughPoses` 목표로 전달. 중간점에서 별도의 목표 완료·정지 대기·Spin·취소를 하지 않음.
 - `asm`, `park`, `rest`처럼 지점이 하나인 경로는 기존 `goToPose` 유지. 출차 후진·회전, 최종 위치·방향 검사, 도킹 순서는 유지.
@@ -40,9 +40,9 @@ python3 common/src/waffle_navigation/test/through_bt_smoke.py --cancel
 
 - 공통 실행 코드 SHA-256: `d37f8e6be8559289524cb4612e89a6877398fde27419c9a1d84db47bb76535fd`
 - 행동트리 SHA-256: `c7b64479e70006a1dfa58736e205127232b1fea1f699a3467edfafab2a602b9b`
-- M1 변경 전: `/home/example_robot/through-waypoints-20261020/backup-1792459442804396056`
-- M1 manifest 변경 전: `/home/example_robot/through-waypoints-20261020/runtime-backup-1792459599235749897`
-- M2 변경 전: `/home/example_robot/through-waypoints-20261020/backup-1792459458004045922`
-- M2 B2 보정 사본·실행 복사본·manifest 변경 전: `/home/example_robot/through-waypoints-20261020/runtime-backup-1792459586685016082`
+- M1 변경 전: `/home/ubuntu/through-waypoints-20261020/backup-1792459442804396056`
+- M1 manifest 변경 전: `/home/ubuntu/through-waypoints-20261020/runtime-backup-1792459599235749897`
+- M2 변경 전: `/home/ubuntu/through-waypoints-20261020/backup-1792459458004045922`
+- M2 B2 보정 사본·실행 복사본·manifest 변경 전: `/home/ubuntu/through-waypoints-20261020/runtime-backup-1792459586685016082`
 
 되돌릴 때도 진행 중 명령 없음과 정지를 확인한 뒤 백업한 실행 코드·wrapper를 복원하고 웨이포인트 작업자를 다시 불러와야 한다. M2는 일반 원본뿐 아니라 B2 보정 사본과 실행 복사본도 함께 복원해야 한다. 주행·도킹·배터리 펌웨어나 속도 설정은 이번 변경 대상이 아니다.

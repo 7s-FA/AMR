@@ -93,12 +93,34 @@ def test_final_position_and_heading_checks_are_still_real(nav):
     assert not nav.goals  # no individual goToPose
 
 
-def test_missing_via_point_never_finishes_even_if_nav2_succeeds(nav, monkeypatch):
+def test_terminal_success_with_stale_feedback_requires_verified_final_pose(nav, monkeypatch):
     nav.route_progress = Progress()
     nav.next_samples = [(2, (.47, .39, 1.57))]
-    monkeypatch.setattr(route, 'finish_waypoint', lambda *a, **kw: pytest.fail('Skipped via point'))
+    checks=[]
+    def finish(*args, **kw):
+        assert nav.route_progress.saved == []
+        assert kw == dict(is_final=True, require_yaw=True)
+        checks.append(True)
+        return True
+    monkeypatch.setattr(route, 'finish_waypoint', finish)
+    assert run(nav) == 0
+    assert checks == [True]
+    assert nav.route_progress.saved == [1, 2]
+    assert len(nav.through_goals) == 1
+
+
+def test_stale_feedback_and_wrong_final_position_never_commit_route(nav):
+    nav.route_progress = Progress()
+    nav.next_samples = [(2, (.47, .20, 1.57))]
     assert run(nav) == 1
     assert nav.route_progress.saved == []
+
+
+def test_success_without_any_feedback_still_checks_final_arrival(nav):
+    nav.route_progress = Progress()
+    nav.next_samples = []
+    assert run(nav) == 0
+    assert nav.route_progress.saved == [1, 2]
 
 
 def test_failed_route_checkpoints_passed_point_but_not_final(nav):

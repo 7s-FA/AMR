@@ -5,7 +5,7 @@ After=burger2-host-ready.service burger2-nav-control.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /home/example_robot/final_robot_ws/robot/burger2/navigation/boot_prepare.sh
+ExecStart=/bin/bash /home/ubuntu/final_robot_ws/robot/burger2/navigation/boot_prepare.sh
 TimeoutStartSec=30min
 KillSignal=SIGINT
 

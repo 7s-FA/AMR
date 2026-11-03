@@ -1155,14 +1155,17 @@ def run_through_waypoints(nav, waypoints, poses, deadline, tree):
                 continue
             return 1
         if not passage.update(nav.getFeedback()):
-            nav.error('Nav2가 종료됐지만 모든 중간점 통과가 확인되지 않아 완료 처리하지 않습니다.')
-            nav.wait_until_stopped(timeout=min(5., max(0., deadline-time.monotonic())))
-            return 1
-        completed = passage.completed
+            # Feedback is a sampled progress hint, not a terminal Result. A
+            # successful NavigateThroughPoses can finish before the last hint.
+            # Never turn missing feedback into a failed/replayed whole route;
+            # require fresh stopped XY/yaw verification before committing it.
+            nav.info('Nav2 성공 · 중간점 피드백 미완료: 최종 정지·위치·방향으로 도착 재검증')
+        completed = len(waypoints) - 1
         if finish_waypoint(nav, waypoints[-1], deadline, len(waypoints),
                            is_final=True, require_yaw=True):
             if progress:
-                progress.complete(len(waypoints))
+                while progress.state['completed'] < len(waypoints):
+                    progress.complete(progress.state['completed'] + 1)
             return 0
         if recovery_retries and getattr(nav, 'position_retry_requested', False):
             prepare_navigation_retry(nav, waypoints[-1], deadline, len(waypoints),

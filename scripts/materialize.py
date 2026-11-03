@@ -63,9 +63,9 @@ def materialize(robot, output, linked=False):
         install(source, dest, linked and kind != 'units' and not dest.name.startswith('dds_'))
         if kind == 'units':
             text = dest.read_text()
-            for old in ('/home/example_robot/final_robot_ws', '%h/final_robot_ws', '$HOME/final_robot_ws'):
+            for old in ('/home/ubuntu/final_robot_ws', '%h/final_robot_ws', '$HOME/final_robot_ws'):
                 text = text.replace(old, str(workspace))
-            for old in ('/home/example_robot/'+manifest['camera_directory'], '%h/'+manifest['camera_directory']):
+            for old in ('/home/ubuntu/'+manifest['camera_directory'], '%h/'+manifest['camera_directory']):
                 text = text.replace(old, str(camera))
             dest.write_text(text)
     for source_root in (ROOT/'common/src/amr_mission', ROOT/'interfaces/host_pkg'):
@@ -76,6 +76,7 @@ def materialize(robot, output, linked=False):
     nav = workspace/'robot'/name/'navigation'
     if not (nav/'action_gate.py').exists():
         install(ROOT/'common/navigation/action_gate.py', nav/'action_gate.py')
+    install(ROOT/'common/navigation/prestart_recovery.py', nav/'prestart_recovery.py')
     (nav/'action_profile.json').write_text(json.dumps(profile, indent=2)+'\n')
     environment = dict(AMR_WORKSPACE=str(workspace), AMR_CAMERA=str(camera), AMR_ROBOT=name,
                        BURGER_PROJECT_ROOT=str(workspace), BURGER_NAV2_BASE_DIR=str(camera),

@@ -30,7 +30,7 @@ class Backend:
         self.service_checked_at=float('-inf')
         profile=self.nav/'action_profile.json'
         self.profile=json.loads(profile.read_text()) if profile.exists() else {'max_linear_mps':.066,'max_angular_rps':.924}
-        if not (0<float(self.profile['max_linear_mps'])<=.08 and 0<float(self.profile['max_angular_rps'])<=1.):raise ValueError('Invalid action speed ceilings')
+        if not (0<float(self.profile['max_linear_mps'])<=.15 and 0<float(self.profile['max_angular_rps'])<=1.):raise ValueError('Invalid action speed ceilings')
         # A restarted action process must never re-authorize a previous action.
         # 정지 래치(estop)는 관제의 EMER_STOP/RESTART 액션으로만 바뀐다 (2026-10-11). 여기서는 목표 권한만 지운다.
         with self.op.lock():

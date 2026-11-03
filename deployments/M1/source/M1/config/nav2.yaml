@@ -42,10 +42,10 @@ amcl:
     always_reset_initial_pose: false
     first_map_only: false
     initial_pose:
-      x: 0.020379762326882656
-      y: 0.009640953270041441
+      x: -0.07934581018476682
+      y: -0.0170246804779209
       z: 0.0
-      yaw: 3.1353725330574638
+      yaw: -3.083818312565123
 bt_navigator:
   ros__parameters:
     default_server_timeout: 1000
@@ -193,11 +193,11 @@ controller_server:
       debug_trajectory_details: false
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.1026432  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
+      max_vel_x: 0.15  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
       max_vel_y: 0.0
       max_vel_theta: 0.4306703388
       min_speed_xy: 0.0
-      max_speed_xy: 0.1026432  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
+      max_speed_xy: 0.15  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
       min_speed_theta: 0.0
       acc_lim_x: 0.396
       acc_lim_y: 0.0
@@ -232,7 +232,7 @@ controller_server:
       waffle_navigation::PositionApproach.heading_start_deg: 5.0
       waffle_navigation::PositionApproach.heading_stop_deg: 12.0
       waffle_navigation::PositionApproach.smooth_speed_enabled: true
-      waffle_navigation::PositionApproach.cruise_speed: 0.1026432  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
+      waffle_navigation::PositionApproach.cruise_speed: 0.15  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
       waffle_navigation::PositionApproach.approach_speed: 0.04  # 2026-10-13 근접 속도 0.03→0.04 (시뮬 nav_sim.py)
       waffle_navigation::PositionApproach.arrival_radius: 0.03
       waffle_navigation::PositionApproach.slowing_distance: 0.25
@@ -530,7 +530,7 @@ velocity_smoother:
     scale_velocities: false
     feedback: OPEN_LOOP
     max_velocity:
-    - 0.1026432  # 2026-10-13 순항 x1.5 에 맞춰 상한 상향 (원래 0.082944)
+    - 0.15  # Match the +30% host ceiling: 0.066 -> 0.0858 m/s.
     - 0.0
     - 0.775982592
     min_velocity:

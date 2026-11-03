@@ -28,7 +28,7 @@ def gate_output(path,v,w,now=None):
         if not (0<=age<=1.0 and math.isfinite(percent) and 0<percent<=100):return 0.,0.
         linear=float(g['max_linear_mps'])*percent/100
         angular=float(g['max_angular_rps'])*percent/100
-        if not (0<linear<=.08 and 0<angular<=1.):return 0.,0.
+        if not (0<linear<=.15 and 0<angular<=1.):return 0.,0.
         return max(-linear,min(linear,v)),max(-angular,min(angular,w))
     except (KeyError,TypeError,ValueError):return 0.,0.
 

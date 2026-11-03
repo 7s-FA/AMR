@@ -7,5 +7,5 @@ model: burger
 runtime_namespace: burger1
 action_name: /M1/data
 ros_domain_id: 40
-max_linear_mps: 0.066
+max_linear_mps: 0.15
 max_angular_rps: 0.924

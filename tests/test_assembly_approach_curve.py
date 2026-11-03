@@ -17,27 +17,35 @@ def configs(robot='M1'):
                  for name in ('waypoints.yaml', 'routes.yaml'))
 
 
-def test_only_m1_assembly_expands_and_keeps_final_pose_and_tuning():
-    base, stations = configs()
+@pytest.mark.parametrize('robot', ['M1','M2'])
+def test_named_approaches_keep_final_pose_and_warehouse_route(robot):
+    base, stations = configs(robot)
     original = copy.deepcopy(stations)
-    del original['variants']['way3_asm']['approach_curve']
-    for selection in ('mat', 'park', 'rest', '1', '2', '3', '4', '12'):
+    for v in original['variants'].values():
+        v.pop('approach_curve',None);v.pop('approach_straight_m',None)
+    for selection in ('mat', '1', '2', '3', '4', '12'):
         assert build_route(base, stations, selection) == build_route(base, original, selection)
-    for selection in ('asm', 'way3_asm'):
+    for selection in ('asm', 'park', 'rest'):
         old = build_route(base, original, selection)
         new = build_route(base, stations, selection)
-        assert len(new['waypoints']) == 5
-        assert new['waypoints'][-1] == old['waypoints'][-1]
+        assert len(new['waypoints']) == 1
+        assert new['waypoints'] == old['waypoints']
         assert new['arrival_tuning'] == old['arrival_tuning']
-        assert all(p['mode'] == 'forward' for p in new['waypoints'])
-        # Last segment points exactly toward assembly (+X), with 12 cm run-in.
-        start, end = new['waypoints'][-2:]
-        assert end['x'] - start['x'] == pytest.approx(.12)
-        assert start['y'] == end['y'] and start['yaw'] == end['yaw'] == 0
-        # All vias are separated beyond RemovePassedGoals' 6 cm radius.
-        assert all(math.hypot(a['x']-b['x'], a['y']-b['y']) > .12
-                   for a, b in zip(new['waypoints'][:-2], new['waypoints'][1:-1]))
-    assert 'approach_curve' not in configs('M2')[1]['variants']['way3_asm']
+        assert new['waypoints'][0]['mode'] == 'forward'
+        if selection == 'park':
+            assert new['waypoints'][0]['yaw'] == 180
+            assert stations['terminal']['park'] == 'park'
+
+
+@pytest.mark.parametrize('value',[0,.06,float('nan'),float('inf'),True,'0.18',.41])
+def test_invalid_straight_approach_rejected(value):
+    base,stations=configs();stations['variants']['way4_rest']['approach_straight_m']=value
+    with pytest.raises(ValueError):build_route(base,stations,'rest')
+
+def test_conflicting_approach_types_rejected():
+    base,stations=configs();stations['variants']['way3_asm'].update(approach_straight_m=.18,
+        approach_curve=dict(radius_m=.18,straight_m=.12,entry_m=.18,side='left'))
+    with pytest.raises(ValueError):build_route(base,stations,'asm')
 
 
 @pytest.mark.parametrize('side,sign', [('left', 1), ('right', -1)])
@@ -59,6 +67,7 @@ def test_curve_rotates_with_target_heading_and_mirrors(side, sign):
 ])
 def test_invalid_curve_rejected_before_route_is_returned(key, value):
     base, stations = configs()
+    stations['variants']['way3_asm']['approach_curve']=dict(radius_m=.18,straight_m=.12,entry_m=.18,side='left')
     stations['variants']['way3_asm']['approach_curve'][key] = value
     with pytest.raises(ValueError):
         build_route(base, stations, 'asm')

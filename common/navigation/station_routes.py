@@ -45,6 +45,15 @@ def curved_entry(point, settings):
         via['yaw'] = math.degrees(math.atan2(following['y']-via['y'], following['x']-via['x'])) % 360
     return result
 
+def straight_entry(point, distance):
+    """A forward via point behind the final heading; final checks stay intact."""
+    if (isinstance(distance, bool) or not isinstance(distance, (int, float))
+            or not math.isfinite(distance) or not .12 <= distance <= .4):
+        raise ValueError('approach_straight_m must be finite, within 0.12..0.4 m')
+    yaw = math.radians(point['yaw'])
+    return dict(x=point['x']-distance*math.cos(yaw),
+                y=point['y']-distance*math.sin(yaw), yaw=point['yaw'], mode='forward')
+
 # 목적지 → 웨이포인트 이름 목록 → 좌표·방향·주행모드가 들어간 경로 사전.
 def build_route(base, stations, selection):
     if selection in stations['routes']:
@@ -64,8 +73,12 @@ def build_route(base, stations, selection):
             point['yaw']=math.degrees(math.atan2(next_point['y']-point['y'],next_point['x']-point['x']))%360
         else:point['yaw']=float(variant['yaw_deg'])%360
         if not all(math.isfinite(float(point[k])) for k in ('x','y','yaw')):raise ValueError('좌표/방향이 유효하지 않습니다.')
+        if 'approach_curve' in variant and 'approach_straight_m' in variant:
+            raise ValueError('Choose one approach type per variant')
         if 'approach_curve' in variant:
             result.extend(curved_entry(point, variant['approach_curve']))
+        elif 'approach_straight_m' in variant:
+            result.append(straight_entry(point, variant['approach_straight_m']))
         result.append(point)
     return {'arrival_tuning':copy.deepcopy(base.get('arrival_tuning',{})),'waypoints':result}
 

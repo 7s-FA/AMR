@@ -52,11 +52,11 @@ flock -u 7
 exec 7>&-
 
 if [[ "${BURGER_PARALLEL_PREPARE:-}" != 1 ]]; then
-# Prepare ROS connections once; no goals or motor/GPIO commands.
+# Prepare ROS connections once; no goals or motor commands.
 # Preparation failure uses the original per-route path.
 bash "$HERE/ensure_waypoint_ready.sh" || echo "웨이포인트 연결 사전 준비 실패: 기존 실행 경로 유지" >&2
 
-# REST standby retains feedback/graph connections; owns no GPIO or speed publisher.
+# REST standby retains feedback/graph connections; owns no speed publisher.
 bash "$HERE/ensure_rest_ready.sh" || echo 'REST 사전 준비 실패: 기존 실행 경로 유지' >&2
 
 fi

@@ -95,13 +95,13 @@ amcl:
     first_map_only: false
     initial_pose:
       # 초기 자세의 지도 X 위치(m).
-      x: 0.008258599567777303
+      x: -0.09029952826538463
       # 초기 자세의 지도 Y 위치(m).
-      y: -0.344867488367798
+      y: -0.3560610252780753
       # 초기 자세의 높이(m). 평면 이동은 보통 0.
       z: 0.0
       # 초기 자세의 방향(rad). waypoints.yaml의 degree와 단위가 다름.
-      yaw: 3.138493403842874
+      yaw: 3.140754287099042
 bt_navigator:
   ros__parameters:
     # 행동트리 목표 접수 응답 대기(ms). 기본 20ms의 일시적 지연 오판을 완화.
@@ -345,7 +345,7 @@ controller_server:
       # 차체 횡방향 최소 속도(m/s). 차동구동 Burger는 0 유지.
       min_vel_y: 0.0
       # 차체 X 최대 속도(m/s). 후진 전용은 0; smoother 상한도 함께 확인.
-      max_vel_x: 0.1026432  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
+      max_vel_x: 0.15  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
       # 차체 횡방향 최대 속도(m/s). 차동구동 Burger는 0 유지.
       max_vel_y: 0.0
       # 최대 회전 속력(rad/s). 증가하면 빠르게 회전하며 제동/추종 특성 확인 필요.
@@ -354,7 +354,7 @@ controller_server:
       # 평면 이동 속력 하한(m/s). 음의 후진 속도 하한과는 다름.
       min_speed_xy: 0.0
       # 평면 이동 속력 상한(m/s). 전후진 모두 속력의 크기 기준.
-      max_speed_xy: 0.1026432  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
+      max_speed_xy: 0.15  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
       # 회전 속력 하한(rad/s). 높으면 미세 회전에 불리할 수 있음.
       min_speed_theta: 0.0
       # X 가속도 상한(m/s²). 실제 구동계 및 smoother와 맞춤.
@@ -407,7 +407,7 @@ controller_server:
       waffle_navigation::PositionApproach.heading_start_deg: 5.0
       waffle_navigation::PositionApproach.heading_stop_deg: 12.0
       waffle_navigation::PositionApproach.smooth_speed_enabled: true
-      waffle_navigation::PositionApproach.cruise_speed: 0.1026432  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
+      waffle_navigation::PositionApproach.cruise_speed: 0.15  # 2026-10-13 순항 x1.5 (원래 0.0684288, 시뮬 nav_sim.py)
       waffle_navigation::PositionApproach.approach_speed: 0.04  # 2026-10-13 근접 속도 0.03→0.04 (시뮬 nav_sim.py)
       waffle_navigation::PositionApproach.arrival_radius: 0.03
       waffle_navigation::PositionApproach.slowing_distance: 0.25
@@ -927,7 +927,7 @@ velocity_smoother:
     feedback: OPEN_LOOP
     # 최대 속도 배열 [vx(m/s), vy(m/s), wz(rad/s)]. DWB 상한과 함께 확인.
     max_velocity:
-    - 0.1026432  # 2026-10-13 순항 x1.5 에 맞춰 상한 상향 (원래 0.082944)
+    - 0.15  # Match the +30% host ceiling: 0.066 -> 0.0858 m/s.
     - 0.0
     - 0.775982592
     # 최소 속도 배열 [vx, vy, wz]. 음수는 후진/반대 회전 허용.

@@ -19,6 +19,9 @@ ROBOT=$(basename "$(dirname "$HERE")")
 CAMERA_ROOT=${AMR_CAMERA}
 [[ "$ROBOT" != burger1 ]] || CAMERA_ROOT=${AMR_CAMERA}
 ACTION=$1
+# dock-asm: 조립대 전용 도킹 모드로 도킹만 (수동 시험용, 2026-10-13)
+ASM_DOCK=0
+if [[ "$ACTION" == dock-asm ]];then ACTION=dock;ASM_DOCK=1;fi
 case "$ACTION" in
  status) exec systemctl --user status "$ROBOT-base.service" "$ROBOT-localization.service" "$ROBOT-nav2.service" "$ROBOT-motion-owner.service" "$ROBOT-nav-control.service" "$ROBOT-docking.service" "$ROBOT-rest.service" --no-pager ;;
  stop|off|dock-stop)
@@ -35,7 +38,7 @@ case "$ACTION" in
   if [[ "$ACTION" == off ]];then systemctl --user stop "$ROBOT-nav2.service" "$ROBOT-localization.service" "$ROBOT-motion-owner.service" "$ROBOT-nav-control.service" "$ROBOT-camera.service" "$ROBOT-docking-ready.service" "$ROBOT-base.service";fi
   exit ;;
  ready|dock|park) ;;
- *) echo '사용법: manage.sh ready|dock|park|dock-stop|stop|off|status';exit 2 ;;
+ *) echo '사용법: manage.sh ready|dock|dock-asm|park|dock-stop|stop|off|status';exit 2 ;;
 esac
 source "$HERE/mission_guard.sh";mission_guard "$ROBOT"
 RUNTIME=$(printenv XDG_RUNTIME_DIR || echo /tmp)
@@ -60,6 +63,8 @@ bash "$HERE/ensure_docking_ready.sh"
 MODE=normal
 if [[ "$ACTION" == park ]];then
  MODE=parking
+elif [[ "$ASM_DOCK" == 1 || "${BURGER_DOCK_DESTINATION:-}" == asm ]];then
+ MODE=assembly   # 조립대: 재료창고와 같은 보드, docking.yaml 의 assembly_control 값 사용
 fi
 rm -f -- "$ROOT/data/$ROBOT/terminal_started" "$ROOT/data/$ROBOT/terminal_result.json"
 systemctl --user reset-failed "$ROBOT-docking.service" 2>/dev/null || true

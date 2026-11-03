@@ -29,3 +29,25 @@ def test_restart_does_not_restore_motion(tmp_path):
     p=write(tmp_path,goal_id=None)
     assert gate_output(p,0,0,10.)==(0,0)
 def test_missing_gate_preserves_individual_mode(tmp_path):assert gate_output(tmp_path/'missing',.02,.1,10.)==(.02,.1)
+
+@pytest.mark.parametrize('percent,expected',[(100,.0858),(50,.0429)])
+def test_thirty_percent_upgrade_keeps_percentage_ceiling(tmp_path,percent,expected):
+    p=write(tmp_path,max_linear_mps=.0858,speed_percent=percent)
+    assert gate_output(p,.2,-.2,10.1)==pytest.approx((expected,-.2))
+    assert gate_output(p,-.2,.2,10.1)==pytest.approx((-expected,.2))
+
+def test_upgraded_ceiling_does_not_accelerate_docking_or_departure(tmp_path):
+    p=write(tmp_path,max_linear_mps=.0858,speed_percent=100,heartbeat=__import__('time').monotonic())
+    assert departure_speed(p)==pytest.approx(.045)
+    assert gate_output(p,.035,.1)==pytest.approx((.035,.1))
+
+def test_above_requested_ceiling_still_stops(tmp_path):
+    assert gate_output(write(tmp_path,max_linear_mps=.151,speed_percent=100),.1,.1,10.1)==(0.,0.)
+
+@pytest.mark.parametrize('percent,expected',[(100,.15),(50,.075)])
+def test_fifteen_cm_limit_and_departure_preserved(tmp_path,percent,expected):
+    p=write(tmp_path,max_linear_mps=.15,speed_percent=percent)
+    assert gate_output(p,.3,.1,10.1)==pytest.approx((expected,.1))
+    p=write(tmp_path,max_linear_mps=.15,speed_percent=100,heartbeat=__import__('time').monotonic())
+    assert departure_speed(p)==pytest.approx(.045)
+    assert gate_output(p,.035,.1)==pytest.approx((.035,.1))

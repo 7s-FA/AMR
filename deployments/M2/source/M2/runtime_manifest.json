@@ -456,7 +456,7 @@
     {
       "source": "common/src/waffle_navigation/launch/burger2_navigation.launch.py",
       "target": "workspace/host_ws/src/waffle_navigation/launch/burger2_navigation.launch.py",
-      "sha256": "00029764e0c03b2fffb08d7ee7aa79c734661167199f8dd2f05fbf65a427755d"
+      "sha256": "28d94291e0ddb1421ac4fd9c943f06ea28f3f73ab49143896265e97f9e958db3"
     },
     {
       "source": "common/src/waffle_navigation/launch/burger1_navigation.launch.py",
